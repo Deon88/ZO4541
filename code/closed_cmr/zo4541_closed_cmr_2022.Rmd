@@ -27,25 +27,35 @@ library(tidyverse)
 
 # Closed CMR data
 
-Important highlights of closed CMR models:
+# What are closed CMR models?
 
 * The aim of closed CMR models is to estimate population size. One of the most fundamental pieces of information for conservation.
 
-* Because we always know how many animals we caught, the objective to estimate the number of animals we did not catch.
+* But the challenge is that we can rarely, if ever, observe all animals in a population.
 
-* The number of animals caught is an estimated parameter (where a parameter is an unknown value estimated from the observation we have), and in `MARK` this parameter is referred to as `f0`.
+* Therefore, because we do know how many animals we caught, the objective to estimate the number of animals we did not catch.
 
-* To estimate `f0`, we need to estimate capture probability (i.e., we assume _imperfect_ detection).
+  + _Number of captured animals + number of uncaptured animals = total population size._
+
+
+* The number of animals that we never caught is an estimated parameter (where a parameter is an unknown single value, e.g., 18, which is estimated from the data we have observed).
+
+  + In `MARK`, this parameter is referred to as `f0`.
+
+
+* To estimate `f0` (number of animals never caught), we need to estimate what the capture probabilities are
+
+  + This means that we assume _imperfect detection_, i.e., we assume we have not caught all animals in a population.
+
 
 * Estimating capture probabilities is how we figure out how many animals were not caught.
 
-For example, assume 3 days of trapping, where the capture probability is a constant 50% (i.e., it's a coin flip if we capture an animal or not). The cumulative probability to capture an animal on all three days (and have an observed capture history of 111) is therefore $Pr(CH_{111}) = p \times p \times p = 0.5 \times 0.5 \times 0.5 = 0.125 = 12.5\%$ (So with a capture probability of 0.5, we have a 12.5% chance to capture an animal on all 3 days). Conversley, the probability to never capture an animal is $Pr(CH_{000}) = (1-p) \times (1-p) \times (1-p) = (1-0.5) \times (1-0.5) \times (1-0.5) = 0.5 \times 0.5 \times 0.5 = 0.125 = 12.5\%$
-
-Alternative, assume 3 days of trapping where capture probabilities vary over time ($p_1 = 0.1$, $p_2 = 0.4$, $p_3 = 0.8$). The probability to capture an animal on all 3 days is therefore $Pr(CH_{111}) = p_1 \times p_2 \times p_3 = 0.1 \times 0.4 \times 0.8 = 0.03 = 3\%$.  Conversley, the probability to never capture an animal is $Pr(CH_{000}) = (1-p_1) \times (1-p_2) \times (1-p_3) = (1-0.1) \times (1-0.4) \times (1-0.8) = 0.9 \times 0.6 \times 0.2 = 0.11 = 11\%$. In this example, we're very unlikely to capture an animal on all 3 days of trapping, but we are comparatively more likely to _never_ captured an animal on all 3 days.
-
-`MARK` uses this information to estimate `f0` (see lecture slides for more details on how this happens).
-
-# Details of the data collection
+  + If we know we caught 10 animals with a capture rate of 50%, then it is very likely there were 10 animals we never caught.
+  
+  + Note that this becomes more complex when we trap over multiple days.
+ 
+ 
+# Details of the Amami rabbit data collection
 
 In 1965 a capture-mark-recapture trapping session, lasting three days, occurred across Amami island in a selection of sites known to have Amami rabbits present. Traps were baited with potato and carrots and were checked once every 24 hours. Researchers did not record any additional information.
 
