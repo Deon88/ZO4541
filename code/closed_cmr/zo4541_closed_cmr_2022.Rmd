@@ -25,9 +25,13 @@ knitr::opts_chunk$set(echo = TRUE,
 library(tidyverse)
 ```
 
+# Request
+
+Please do not share this document with the students. This is only for your use, either to get a sense of the data or as a crib sheet with information to pass on to students.
+
 # Closed CMR data
 
-# What are closed CMR models?
+## What are closed CMR models?
 
 * The aim of closed CMR models is to estimate population size. One of the most fundamental pieces of information for conservation.
 
@@ -35,33 +39,109 @@ library(tidyverse)
 
 * Therefore, because we do know how many animals we caught, the objective to estimate the number of animals we did not catch.
 
-  + _Number of captured animals + number of uncaptured animals = total population size._
+  + Number of captured animals + number of uncaptured animals = total population size.
 
+> A hugely important concept to get across is that these models explicitly assume imperfect detection (i.e., you do not observe all animals) and then estimates what your detection rate was. This is in contrast with more convetional models, e.g., linear models, etc., which do not do this, and therefore assume _they have_ seen all animals.
+
+* Closed CMR models use data in the form of capture histories (CH). A capture history of, e.g., `110` means an animal captured on day 1, day 2 but not day 3.
+
+* Capture histories can either be aggregated (as frequencies, e.g., 15 animals caught had a CH of `101`), or per individual (e.g., 15 rows, each with a CH of `101`). For the closed CMR practical, the students will have the data in frequency format (but for the open CMR practical, the data will be per individual).
 
 * The number of animals that we never caught is an estimated parameter (where a parameter is an unknown single value, e.g., 18, which is estimated from the data we have observed).
 
-  + In `MARK`, this parameter is referred to as `f0`.
+* Animals which were never caught have the CH `000`.
+
+  + In `MARK`, this parameter is referred to as `f0` (`f0` because it is the _Frequency_ of animals with capture histories of _0_, or `000`).
 
 
-* To estimate `f0` (number of animals never caught), we need to estimate what the capture probabilities are
-
-  + This means that we assume _imperfect detection_, i.e., we assume we have not caught all animals in a population.
-
+* To estimate `f0` (number of animals never caught), we also need to estimate what the capture probabilities are.
 
 * Estimating capture probabilities is how we figure out how many animals were not caught.
 
-  + If we know we caught 10 animals with a capture rate of 50%, then it is very likely there were 10 animals we never caught.
+  + If we caught 10 animals with a capture rate of 50%, then it is very likely there were 10 animals we never caught ($\frac{10}{0.5} = 20$).
   
-  + Note that this becomes more complex when we trap over multiple days.
+  + Note that the underlying mechanics are more complex than this, but this should give you a gut feeling for how the method works.
+  
+* Closed CMR models estimate both capture probabilities and `f0` at the same time (see [here](https://twitter.com/rlmcelreath/status/1454033843095224324) for a visualisation of two parameters being estimated at the same time).
  
- 
-# Details of the Amami rabbit data collection
+### Multinomial distribution
 
-In 1965 a capture-mark-recapture trapping session, lasting three days, occurred across Amami island in a selection of sites known to have Amami rabbits present. Traps were baited with potato and carrots and were checked once every 24 hours. Researchers did not record any additional information.
+* For demonstrator information only (the students do not need to know this, unless you are comfortable explaining it and they are interested), this data is modelled as coming from a multinomial distribution.
 
-This data collection process was replicated in 1983, and again in 2022. However, in 2022 researchers noted the age of the rabbit, determined by weight (including one year olds, two year olds, and adults [>= 3 years old]).
+* A multinomial distribution is an extension of the binomial distribution, where each event (here CH, but can also be, e.g., the 6 different faces of a dice) has an associated probability.
 
-# 1965
+* For example, assuming 2 days of trapping could give the CH of `11`, `10` and `01` (as well as the unobserved `00`). 
+
+  + Assume for CH = `11` we have 4 individuals, CH = `10` we have 10 individuals, and CH = `01` we have 4 individuals. 
+
+  + Assume that the capture probability is 50% on day one ($p_1 = 0.5$) and 20% on day two ($p_2 = 0.2$)
+  
+  + The full multinomial distribution would be: $f(N_{11}, N_{10}, N_{01}, f_0 | S \ p_{11}, p_{10}, p_{01}, p_{00})$, 
+  
+  + where;
+  
+    - $N_{11}$ is the number of animals with CH of `11`
+    
+    - $N_{10}$ is the number of animals with CH of `10`
+    
+    - $N_{01}$ is the number of animals with CH of `01`
+    
+    - $f_0$ is the number of animals with CH of `00`
+    
+    - $S$ is the number of potential outcomes (i.e., how many CH are possible)
+    
+    - $p_{11}$ is the cumulative probability of being caught on both days (i.e., $p_1 \times p_2$)
+    
+    - $p_{10}$ is the cumulative probability of being caught on the first day only (i.e., $p_1 \times (1-p_2)$)
+    
+    - $p_{01}$ is the cumulative probability of being caught on the second day only (i.e., $(1-p_1) \times p_2$)
+    
+    - $p_{00}$ is the cumulative probability of never being caught (i.e., $(1-p_1) \times (1-p_2)$)
+  
+  + We can plug our values in:
+  
+  + $f(4, 10, 4, f_0 | 4 \ p_1 \times p_2, p_1 \times (1-p_2), (1-p_1) \times p_2, (1-p_1) \times (1-p_2)) = f(4, 10, 4, f_0 | 4 \ 0.1, 0.4, 0.1, 0.4)$
+
+  + From this the model would try to estimate `f0`, but equally, we could have specified a potential value of `f0` and tried to estimate the capture probabilities.
+  
+  + At its simplest, capture probability is the number of animals captured / the total population size ($p = \frac{M}{\hat{N}}$, where $p$ is capture probability, $M$ is number of marked animals, and $\hat{N}$ is estimated total population size).
+  
+  + Note, however, that the different closed CMR models will calculate capture probability differently.
+
+## Details of the Amami rabbit data collection
+
+> The big inference I hope the students take from this is that there was a dramatic crash in rabbit density from 1965 to 1983. Although they do not explicitly model it, the mongoose invaded in the 1970s (likely around 1979), so a reasonable conclusion is that mongoose predation has dramatically reduced rabbit numbers.
+
+> The population continues to decline up to the present day, though the rate of decline appears to have slowed.
+
+> In 2022, the students have data split by age. This will be used later in the course, when they do matrix population modelling. Rabbit numbers do recover, but not to the "historical" reference point.
+
+> Drop hints to the students (without outright telling them) that they have a conservation objective in the data (the 1965 density is a reasonable long term objective for their management plans).
+
+Beginning on the 3rd of July 1965, a capture-mark-recapture trapping session, lasting three days, occurred across the Amami island in a selection of sites known to have Amami rabbits present. Traps were baited with potato and carrots and were checked once every 24 hours. Researchers did not record any additional information.
+
+This data collection process was replicated in 1983, and again in 2022. However, in 2022 researchers recorded the age of the rabbit, determined by weight (including one year olds, two year olds, and adults [>= 3 years old]).
+
+### Population trend
+
+```{r}
+df <- data.frame(
+  year = c(1965, 1983, 2022),
+  abundance = c(674, 421, 83 + 59 + 106)
+)
+
+ggplot(df) +
+  geom_point(aes(x = year, y = abundance), size = 2) +
+  geom_path(aes(x = year, y = abundance)) +
+  labs(x = "Year",
+       y = "True Amami rabbit abundance") +
+  ylim(c(0, 700)) +
+  theme_bw() +
+  theme_minimal()
+```
+
+
+## 1965
 
 There are 674 rabbits in 1965. Note that there were no rabbits on the island, so this can act as a "control" or reference abundance the students may want to use as a conservation objective. Don't outright tell them this, but nudge them in this direction.
 
@@ -142,7 +222,7 @@ ggplot(cap1965) +
   theme_minimal()
 ```
 
-# 1983
+## 1983
 
 There are 421 rabbits in 1983. Note that the mongoose were introduced in the late 1970s, so the reduction here is meant to reflect the mongoose impact after a handful of years.
 
@@ -237,9 +317,9 @@ ggplot(cap1983) +
   theme_minimal()
 ```
 
-# 2022 
+## 2022 
 
-## One year olds
+### One year olds
 
 There are 83 one year old rabbits in 2022.
 
@@ -331,7 +411,7 @@ ggplot(cap2022_juv) +
   theme_minimal()
 ```
 
-## Two year olds
+### Two year olds
 
 There are 59 two year old rabbits in 2022.
 
@@ -423,7 +503,7 @@ ggplot(cap2022_suba) +
   theme_minimal()
 ```
 
-## Adults
+### Adults
 
 There are 106 adult rabbits in 2022.
 
