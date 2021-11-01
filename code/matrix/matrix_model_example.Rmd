@@ -1,0 +1,692 @@
+---
+title: "Matrix modeling for Wildlife Conservation and Management"
+subtitle: "Deon Roos"
+author: "This document was produced in RMarkdown"
+date: "Last run on: `r format(Sys.Date())`"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    df_print: kable
+    highlight: tango
+---
+
+
+# R basics
+
+`R` is a programming language designed, primarily, to do statistics. As far as pure programming languages go, it's not the language to end all languages. For instance, for building applications, you'd be very unlikely to use `R` as your language of choice (though you can do this in `R`). Even within `R`, much of the background work is being handled by another language. You shouldn't think of `R` as some sort of holy grail, instead, think of it as the current preferred option (mostly because it's widely used).
+
+That said, programming is an incredibly valuable skill to have, irrespective of which language you use. With this in mind, many of the skills you need to use `R` are relateable to other languages, but we'll focus on `R` for now.
+
+At it's most basic, `R` is just a fancy calculator:
+
+```{r}
+2 + 2
+```
+
+When we do 2 + 2, we get 4. Ignore the `[1]` for now.
+
+If we wanted, we could store this output so that we could use it later (and save ourselves that incredible effort of typing `2 + 2`...)
+
+```{r}
+x <- 2 + 2
+```
+
+We use the "gets" operator (the `<-`) to store the output of 2 + 2 into something we've called `x`. I can then type `x` whenever I want to get the output again.
+
+```{r}
+x
+```
+
+And then use `x` to do further calculations or operations:
+
+```{r}
+x + 100
+```
+
+We can also use this to store a whole bunch of values in a single object. Here's well use `c()` (a function, see next paragraph) to concatenate a number of values into a column of data:
+
+```{r}
+y <- c(1, 2, 3, 4, 5)
+```
+
+We can now "call" `y`:
+
+```{r}
+y
+```
+
+And doing so gets us a column, or vector, of values (admittedly, presented as a row).
+
+Commands such as concatenate (`c()`), are referred to as "functions" (and are highlighted as light blue text when you see code in this document). We call them "functions" because they make `R` do a specific function. The base version of `R` has a wide variety of functions, which you can think of as code versions of buttons. For example, where in Minitab you might click the "Mean" button to calculate the mean value of y, in `R` we would write `mean(y)`.
+
+```{r}
+mean(y)
+```
+
+Functions require information to work. In `R`, we refer to these pieces of information as arguments. The only piece of information we used in `mean()`, was the column of data we wanted to calculate the mean for (`y` in the above example).
+
+One last simple thing to be aware of are comments in code. Comments are notes that you write to yourself or other programmers explaining what you are doing. To write a comment you __must__ use the correct character to identify the note as a comment, meaning that your note won't be read as actual code by `R` (comments are highlighted as orange text when you see code in this document). In `R`, comments are designated using the # symbol (called pound, number, hashtag or variants depending on who you ask). For reference, when we were writing the .INP files for `MARK` (essentially simple code), we denoted comments using `/* comment */`.
+
+```{r}
+# While in R, we denote comments by first typing "#"
+```
+
+A final note when you are battling with a function, either due to errors, or because you are not sure how to use it. The first solution is to ask `R` to help out. We can do this by doing:
+
+```{r, eval = F}
+?mean
+```
+
+When we run this code, we are asking (`?`) `R` to open the help file for a particular function. These help files can be difficult to understand, but with practice, they begin to be genuinely helpful.
+
+Failing that, Google is insanely useful when programming. When I am writing code, I will always have a dedicated tab open in my internet browser simply for googling any issues I come up against. There is a skill to phrasing your question so that google is actually useful, but again, with practice it becomes second nature.
+
+There is obviously much more to what you can do in `R`, but the intricacies and details are beyond the scope of this course. For now, this brief overview of the core functionality will hopefully suffice, but feel free to ask questions.
+
+# Packages
+
+You can accomplish almost anything you could imagine using the `{base}` version of `R`, but doing so would require you to write mountains and mountains of complicated, interconnected code. Given that few of us have the time or expertise to do so, we can instead use code written by others as "shortcuts". 
+
+In the "good-old" days of programming, to use someone else's code, would mean having to email them (or write an actual letter in the "super-old-days"), ask to have their code, hope they send it, then copy and paste their code into your programming language, all the while hoping that everything still worked. 
+
+The good news is that we can instead download and install a pre-compiled assortment of code from authors who make their code freely available online. These "packages" of code are often  thoroughly tested by the community to make sure it does what it claims to do (or at least that it works most of the time). 
+
+These pre-compiled chunks of code are called `packages`. To install them we use a function to install the package, `install.packages("package_name")`. This will then automatically download and install the code to your computer. However, doing so won't make it immediately available to you to use. To actually use it in an `R` session we need to use another function to load it, called `library(package_name)`. 
+
+Note that `install.packages("package_name")` requires "quotes" around the package name, while `library(package_name)` does not.
+
+For this part of the course we'll be installing a package called `popdemo`, written by Ian Stott, Dave Hodgson and Stuart Townley from the University of Exeter, specifically designed to do matrix modeling.
+
+Let's start by downloading the package:
+
+```{r, eval = F}
+install.packages("popdemo") # You only need to do this once
+```
+
+And then load it to make it available for `R` to use:
+
+```{r}
+library(popdemo) # Do this every time you start R
+```
+
+And that's all there is to getting `popdemo` installed, loaded and ready to use. Note that each time you close down `R` or RStudio, you'll also be unloading all packages, so the next time you open `R` you'll need to _reload_, but not re-install, any packages you want to use.
+
+A good habit to get into, is to have code written at the very top of your script that loads all the packages (using `library(package)`) that you use in your analysis. That way, when you start `R` the next day, you can quickly load the required packages, and jump straight back into the coding.
+
+On to the modeling.
+
+\newpage
+
+# Matrix population models
+
+A matrix population model is a type of analysis/simulation/prediction which allows you to peak into various alternative futures and see what your population of interest might do in 10 years. Or 20 years. Or 100 years. Matrix models come in two broad forms; _age-_ and _stage-_based matrix models. For this course we will only be working with stage-based matrix models, but it's good to know what's available to you.
+
+Let's get the simple stuff sorted first. What does stage-based mean? It just means that individuals can be grouped into stages in a number of ways: size, sexual maturity, or any way you feel is appropriate for the given species. We do this all the time for humans: babies; toddlers; children; teenagers; young-adults; mid-life-crisis-ers; the rich; OAPs.
+
+In the same way, we can group animals into stages, often taking the form of something like: yearling; juvenile; subadult; adult.
+
+## Deterministic population dynamic
+
+Within both age- and stage-based matrix models, we can split these further into _deterministic_ and _stochastic_ age- and stage-based matrix models. Read these as "no random nonsense happens" (_deterministic_) and "random nonsense happens" (_stochastic_). We'll only be using deterministic models in this course, but again, be aware that there are other options.
+
+More broadly and ignoring the specifics, all of these matrix models can really be thought of as ways to do predictions, where we use our current knowledge of a population, and try to predict what will happen in the future. Using this approach, we can also test various conservation/management actions to see if they will improve or worsen the fate of the species. 
+
+Conceptually, (and only conceptually) you can think of these models in much the same way as you think about climate change models. Climate change models show various possible futures: business-as-usual; 1.5 deg increase etc., and there's a conceptual similarity with what we'll do - just swapping out future global temperatures for Amami rabbits.
+
+## The stage-based matrix
+
+[Insert stupid and dated Matrix joke here]
+
+To build our models, we need information. Some, but not all, of this information can come from some of your closed and open CMR analyses.
+
+The data we need are: 
+
+* reproductive output for each stage, 
+
+* transition/survival probabilities for each stage, 
+
+* population size estimates by stage.
+
+While none of the analysis in this course has focused on reproductive outputs, the concept should be fairly familiar to you all. This is simply the number of offspring an individual has every year.
+
+Transition rates are the probabilities of individuals growing into the next stage (i.e. a toddler becoming and child, or a subadult growing into an adult).
+
+Finally, survival probability (sometimes called "the stasis transition"), is the probability that an individual survives from one year to the next, but they remain in their current stage (i.e. a teenager surviving from 2013 to 2014 but remains a teenager).
+
+Sometimes when we want to build a matrix model we only have some of these _intrinsic rates_. While it's obviously preferable to design and organise a study to estimate all of these values, we don't always have the time to do. Remember that in many conservation settings, the house has almost burnt down. You might not have the time to figure out what caused the fire, or get that _last_ bit of data. Instead, what we can do is borrow values from species who we believe are good substitutes or analogues (more on this later). 
+
+\newpage
+
+# Practical 4
+
+Below is a worked example, with questions and tasks for the practical, showing how you can create the required information for a stage-based matrix model, and then how to use that information to predict population dynamics into the future.
+
+## Preparing for the matrix
+
+We'll start by creating a matrix to use in the analysis. There are a few things to note here. 
+
+First, the code below has a bunch of comments where I've added brief notes explaining what each line of code is doing. This serves two purposes: to help demonstrate to you all what's going on in the code; but also to remind myself in $X$ months time exactly what I was doing. This is a really good habit to get into. It can be incredibly hard going back to old code and trying to make sense of what past-you did. It's even worse when it's someone else's code that they never commented.
+
+The second thing to note is that this is completely faked data, but you can use this code, _almost_ exactly as is, for predicting the Amami rabbit population trajectory. There are two things you will need to change though. First, and hopefully obviously, you will need to substitute in your own values for the various rates (survival rates from the open CMR analysis, population sizes of each stage from the closed CMR, fecundity rates from external sources). Second, the current matrix will not reflect the life history of the Amami rabbits perfectly. Keep in mind that the Amami rabbit stages only last for a year (until they become adults, at which point, they remain adults for the remainder of their lives), so you will need to tweak the matrix to account for this.
+
+### Gemsbok
+
+The species we will work with in this document are gemsbok (_Oryx gazella_). In this example, I propose that there are three stages: yearling; subadults; and adults. Yearlings cannot remain as yearlings (so must grow into subadults), while subadults and adults can remain in their respective stage. While subadults could technically stay subadults indefinitely, there is a probability that they will grow into an adult. Once you are an adult, however, you will remain an adult until you eventually die.
+
+The following matrix will reflect a pre-breeding survey (as is the case for the Amami rabbit datasets).
+
+__Gemsbok vital rates:__
+
+To build our model, requires a number of rates/probabilities:
+
+_Growth probabilities_ (i.e. survive and grow into next stage):
+
+* $G_Y$, the probability to transition from yearling to subadult
+
+* $G_{sa}$, the probability to transition from subadult to yearling
+
+_Survival probabilities_ (i.e. survive and remain in current stage):
+
+* $\phi_{sa}$, the probability for subadults to survive and remain subadults
+
+* $\phi_a$, the probability for adults to survive and remain as adults
+
+_Fecundity rates_:
+
+* $F_{sa}$, the amount of yearlings produced by subadult females which survive to be surveyed
+
+* $F_a$, the amount of yearlings produced by adult females which survive to be surveyed
+
+#### Storing vital rate values
+
+__Transition probabilities:__
+
+To begin with, I will store the information about the vital rates for this hypothetical gemsbok population, starting with the transition probabilities from one stage to the next.Keep in mind, that in this example, a yearling must transition (it can only be a yearling for one year), but subadults and adults can remain in those stages.
+
+```{r}
+G_y <- 0.210  # Yearling transition probability is 21%
+G_sa <- 0.567 # Sub-adult transition probability is 56.7%
+```
+
+__Survival probabilities:__
+
+Next we will store the survival probabilities, again, keeping in mind that only subadults and adults can survive and remain in their respective  stages.
+
+```{r}
+phi_sa <- 0.149 # Sub-adult survival (and remain subadult) at 14.9%
+phi_a <- 0.750  # Adult survival (and remain adult) at 75%
+```
+
+__Fecundity rates:__
+
+Finally, we will store the fecundity rates, but keep in mind, we will need to make various alterations to account for the fact that we are doing a pre-breeding survey (as with the Amami rabbits), as well as the fact that only females produce offspring.
+
+_Sex ratio:_
+
+Let's start with defining and storing $\sigma$, the sex-ratio for gemsbok. For the sake of this example, I will say that the sex-ratio is 75% female:
+
+```{r}
+sigma <- 0.75 # Sex ratio of 75% female
+```
+
+_Offspring produced:_
+
+Next I will define and store $\mathit{m}_{Stage}$, the number of offspring produced per individual gemsbok. Here subadults produce an average of 1.3 yearlings per subadult gemsbok (average for both females and males), and adults produce 1.9 yearlings:
+
+```{r}
+m_sa <- 1.3 # yearlings produced per subadult
+m_a <- 1.9  # yearlings produced per adult
+```
+
+_Calculate surviving offspring per female:_
+
+Since we can use `R` to do calculations using stored values (such as `sigma`, `m_a`, etc.), we can use this to calculate our $\mathit{F}_{Stage}$. Remember two things here, first, we are doing pre-breeding surveys, so our offspring must survive for < 1 year to be considered part of our population. We can use the following equation to calculate pre-breeding fecundity, to bring all of this information together:
+
+$\mathit{F}_{Stage} = \mathit{m}_{Stage} * \phi_{Yearling} * \sigma$
+
+The second issue to keep in mind here is that we don't _technically_ have a yearling survival probability - we have a yearling transition probability. But the good news is that yearlings are only a yearling for one year, so their transition probability ($G_Y = 0.21$) __is__ their survival probability ($\phi_Y = 0.21$). Therefore, to calculate fecundity, $F$, using the values we've stored in `R` so far, we do:
+
+```{r}
+F_sa <- m_sa * G_y * sigma
+F_a <- m_a * G_y * sigma
+```
+
+\newpage
+
+### The matrix
+
+Now we can bring all of this together, in the form of a matrix. __NOTE__ that the code here can be misleading to read, mostly because, although we are creating columns, when writing the code to create a column, it looks like we're actually creating rows. For instance, although the code `yearlings  = c(0, G_y, 0)` creates a yearling _column_ in the matrix, the actual written code (below) itself makes it look as though it is a row. 
+
+If, at any point, you get confused where to put the values, either ask for help, or try running the code below and see what it produces, and use the resulting matrix to help guide you to any tweak you need to make to your code.
+
+```{r}
+gemsbok <- as.matrix(                       # Convert dataframe to a matrix
+  data.frame(                               # Create a dataframe using columns
+    yearlings  = c(0,      G_y,    0),      # Create yearlings column
+    sub_adults = c(F_sa,   phi_sa, G_sa), # Create subadults column
+    adults     = c(F_a,    0,      phi_a)   # Create adults column
+  )
+)
+
+row.names(gemsbok) <- colnames(gemsbok) # Copy the column names to row names
+
+gemsbok # Shows the gemsbok matrix in the console
+```
+
+After entering our values and then "calling" the matrix (i.e. telling `R` to print the matrix in the console by typing `gemsbok`), `R` now presents a matrix with the correct alignment (rows are rows and columns are columns), exactly as we would write them mathematically (just with actual values instead of labels);
+
+$$
+\mathcal{A} = 
+\left(\begin{array}{ccc} 
+0&F_{sa}& F_a\\
+G_y&\phi_{sa}&0\\
+0&G_{sa}&\phi_a
+\end{array}\right) = 
+\left(\begin{array}{ccc} 
+0&0.205& 0.299\\
+0.210&0.567&0\\
+0&0.149&0.750
+\end{array}\right)
+$$
+
+If you need a refresher on how to read these matrices;
+
+> Read these matrices by going through it, one column at a time. In each column, each value (or cell) represents the contribution from that year's stage (column name) to the next year's stage (row name). So for example, the first cell in the adult column (with a value of `0.29925`) is the impact adults (the column) have on the number of yearlings (the row) - i.e., the average number of offspring an individual adult produces in a year.
+
+Let's go through the subadults column in a bit more detail, from the top row to the bottom;
+
+* `0.20475` is number of offspring (i.e. yearlings) produced each year
+
+* `0.56700` is the probability of surviving and remaining a subadult
+
+* `0.14900` is the probability of surviving and growing into an adult
+
+Next let's do yearlings;
+
+* Yearlings cannot breed in this example so they cannot contribute to the yearling stage
+
+* They do contribute to the subadult stage, by transitioning at a rate of $G_Y = 0.21$ each year
+
+* Yearlings cannot contribute to adults, because they _must_ first become a subadult
+
+---
+
+_A brief note on how to calculate mortality_
+
+You do not need to do this, but hopefully this helps a little to understand what these values represent.
+
+Using $G_{Stage}$ and $\phi_{Stage}$ we could always calculate the mortality rate by doing $(1 - (G_{Stage} + \phi_{Stage}))$. For example, the mortality rate of subadults would be $1 - (0.567 + 0.149) = 0.284$. This is because if you haven't transitioned from subadult to adult, or survived to remain a subadult, it means you have died.
+
+---
+
+### Questions
+
+1. What is the mortality rate of yearlings?
+
+2. What are the contributions of adults to all of the other stages of gemsbok?
+
+\newpage
+
+## Eigenvalues
+
+Eigenvalues are values which are calculated based on the matrix itself (we're not yet doing the matrix modeling). They are surprisingly informative and can, by themselves, be a useful tool for making decisions.
+
+To get various eigenvalues, we can use the `eigs()` function to calculate values of interest. 
+
+### Growth rate
+
+We'll start with lambda. We need to specify two pieces of information for the `eigs()` function: the matrix, specified by saying `A = our_matrix_name`, and what eigenvalue we want reported, specifed by saying `what = "lambda`:
+
+```{r}
+eigs(A = gemsbok, what = "lambda")
+```
+
+Lambda (or $\lambda$) is the population growth rate. When $\lambda < 1$, then the population is declining. When $\lambda = 1$ the population is stable. When $\lambda > 1$ then the population is growing.
+
+This fake gemsbok population has a $\lambda$ value of 0.82, meaning that each year, the population reduces in size by 18% (1 - 0.82).
+
+### Stable dynamics
+
+Next we'll look at `ss` or the stable dynamics:
+
+```{r}
+eigs(A = gemsbok, what = "ss")
+```
+
+These values represent the ratio of the numbers of individuals in each stage _once_ the population has reached stability. Note that stability doesn't mean that the population is __neither__ increasing or decreasing, but rather that it is has settled on a final trajectory.
+
+So here for example, 26% of our gemsbok population is made up of yearlings once the population has settled on it's final trajectory, and 8% are made up of subadults.
+
+### Reproductive value
+
+Finally, the reproductive value of each stage:
+
+```{r}
+eigs(A = gemsbok, what = "rv")
+```
+
+The reproductive value is the relative contribution each stage makes towards stable growth (through __surviving__, __transitioning__ and __reproducing__). Stages which have high survival and transition probabilities, and high reproductive output have high reproductive values.
+
+In our case, the most "valuable" stage for stable growth are adults (with a reproductive value of 1.26). If we have a limited pot of money, this information might be useful for figuring out where to spend it (but see the next section for a better option).
+
+#### Questions
+
+1. What is the adult stage's stable dynamic value and what does this tell you about the gemsbok population?
+
+2. Which stage has the least contribution towards a stable population growth?
+
+\newpage
+
+## Sensitivity and elasticity analysis
+
+Similar, but in some cases more powerful than eigenvalues, are the sensitivity and elasticity values. These values can be calculated when using matrices, to determine which rate, for a particular age or stage, are most sensitive to change.
+
+For management or conservation purposes, the resulting values can be immensely powerful information for making _informed_ decisions (with the usual caveat that an informed decision may turn out to be wrong, but given the information to hand at the time, it was the correct decision to make).
+
+### Sensitivity
+
+Sensitivity analysis is a method to determine which rates (e.g., $\phi_{Stage}$, $G_{Stage}$ and $\mathit{F}_{Stage}$ for stage-based matrix models) are the most sensitive to change.
+
+We can do sensitivity and elasticity analysis using a just two functions from the `popdemo` R package. The first we will use is called `sens()` (short for sensitivity).
+
+The output is a matrix which uses the same structure as our original `gemsbok` matrix. As a reminder to help you navigate the above matrix, here is the `gemsbok` matrix again.
+
+$$
+\mathcal{A} = 
+\left(\begin{array}{ccc} 
+0&F_{sa}& F_a\\
+G_y&\phi_{sa}&0\\
+0&G_{sa}&\phi_a
+\end{array}\right)
+$$
+
+```{r}
+sens(A = gemsbok)
+```
+
+From the sensitivity analysis, the larger the value, compared to the others, the more sensitive that rate is to change. So from our sensitivity matrix, our most sensitive rate is adult survival ($\phi_Y$ with a sensitivity of $0.82$). Conversely, the vital rate with the lowest sensitivity is subadult fecundity ($\mathit{F}_{SA}$ with a sensitivity of $0.02$).
+
+We could use these values to guide us towards a potential conservation intervention, for instance, we may decide to try and improve adult survival, since it has the highest sensitivity value.
+
+There is a problem with this approach however; sensitivity is not _scalar_. That is, sensitivity is not proportional, meaning that it can be very difficult to interpret these results. An extension of sensitivity analysis, is elasticity analysis, which _is_ proportional thus making it easier to compare.
+
+### Elasticity
+
+To help decide which rates ($G_{Stage}, \phi_{Stage}$ and $F_{Stage}$) can be most influential for conservation proposes, converting sensitivity to a proportional equivalent would be best.
+
+This is where elasticity comes into play. Elasticity is simply sensitivity, but scaled so that the values represent the effectiveness of altering all rates by a constant proportional change (e.g. 1%). This allows us to consider which rate would have the _greatest effect on population growth_, if we increased or decreased it by a given amount?
+
+Let's get `popdemo` to report the elasticity analysis (again in the same structure as the `gemsbok` matrix);
+
+$$
+\mathcal{A} = 
+\left(\begin{array}{ccc} 
+0&F_{sa}& F_a\\
+G_y&\phi_{sa}&0\\
+0&G_{sa}&\phi_a
+\end{array}\right)
+$$
+
+```{r}
+elas(A = gemsbok)
+```
+
+If you summed all the elasticity values, they would sum to 1 (because they are proportional), which means that we can now, more comfortably, read these values as indicating the most important rates we could influence when trying to save this population of gemsbok.
+
+From the output of the function `elas()`, we can identify that it is still adult survival (with a value of $0.76$), which is the most important rate for the growth of this population. Note that the same rates are not always identified by both sensitivity and elasticity, despite being the case in this example.
+
+> If we were trying to make our conservation as efficient as possible, targeting adult survival, based on the elasticity analysis, is where our resources might be most effective.
+
+\newpage
+
+## Matrix model
+
+### Population size at time 0
+
+There's one final piece of information we require before predicting the future population trend of this gemsbok population. The number of individuals in each stage from the most recent estimate, something which you have for the Amami rabbits.
+
+Mathematically, this was:
+
+$$
+N_0 = 
+\left(\begin{array}{cc} 
+N_y\\N_{sa}\\N_a
+\end{array}\right)
+$$
+where $N_0$ was the most recent total population size, itself broken into $N_y$ (the number of yearlings), $N_{sa}$ (the number of subadults), and $N_a$ (the number of adults) from the most recent population size estimate.
+
+Here, as before, I'll fake some data:
+
+```{r}
+numbers_at_stage <- c(
+  20, # Number of yearlings
+  15, # Number of subadults
+  10  # Number of adults
+)
+```
+
+In most cases, the sizes you use here won't be terribly important for making inferences about the population at large (e.g. any hypothetical gemsbok population), but if you wanted highly specific predictions (e.g. the gemsbok population in Messom Crater), then using accurate population size estimates are important.
+
+### The actual model
+
+Running the actual model is, hopefully, very easy. We'll use the `project()` function. This function needs three pieces of information (called arguments in programming) from us to run. The first is our matrix, which we specify by typing `A = gemsbok`. `A` is used here because matrices of this form are often denoted as $\mathcal{A}$. 
+
+Next we need the column of data (called a vector in mathematics and programming) which contains our number of individuals in each stage at time 0 (i.e. time 0 being the most recent population size estimate). We fulfill this, using the column of data we created, called `numbers_at_stage`, by typing `vector = numbers_at_stage`. 
+
+Finally we need to tell the function how long in to the future we want to predict the population sizes. Here we fulfill the argument by typing `time = 25` (meaning we will predict 25 years into the future). You can always predict over shorter periods, or longer. Whichever is of more interest. Keep in mind, the further into the future we predict, the more "unreliable" the prediction becomes (i.e. predicting 25 or 50 years may be useful as we can assume/hope the world won't dramatically change in that time, but things could change dramatically a million years into the future).
+
+Showing this mathematically, we are providing the following information to `project()` function:
+
+$$
+N_{t=25} = 
+\left(\begin{array}{cc} 
+N_y\\N_{sa}\\N_a
+\end{array}\right)
+\times
+\left(\begin{array}{ccc} 
+0&F_{sa}& F_a\\
+G_y&\phi_{sa}&0\\
+0&G_{sa}&\phi_a
+\end{array}\right)
+$$ 
+
+And with that done, we're good to make our prediction:
+
+```{r}
+business_as_usual <- project(A = gemsbok, vector = numbers_at_stage, time = 25)
+```
+
+Nothing immediately happens, but if you look in your environment tab (top right of RStudio), you'll see `business_as_usual` has appeared there.
+
+To see what the predictions look like, we can just use the `plot()` function.
+
+```{r}
+plot(business_as_usual)
+```
+
+And now we have our "business as usual" prediction, which shows what will likely happen to this population if we do nothing. Note that the population starts at 45 individuals? This is the number of animals we said were in each stage at time 0 (our $N_0$ vector). The prediction shows that, as we move forward in time (from left to right in the Time Intervals on the x-axis), the population declines rapidly. 
+
+If we wanted to know the predicted population size in a given year of our prediction, we can make use of some fairly arcane coding. A very brief explanation of the code is that the `business_as_usual` object actually contains multiple pieces of information, one of them being the total population size. We access this by writing:
+
+```{r}
+business_as_usual@.Data # population sizes in each predicted year
+```
+
+The first value is the population size at the start of the prediction (45 gemsbok). Each subsequent value is the total population size in each of the predicted years. To get a population size for a given year, say for year 10, we would write:
+
+
+```{r}
+business_as_usual@.Data[11] # population size in year 10
+```
+
+Note that if we want to know the population size in year 10, we write `[11]`, because our $N_0$ is the in the first row, so we need to add 1 to the number in the __square brackets__. For example, `business_as_usual@.Data[2]` would give us the population size, 1 year into the prediction.
+
+Looking back at the plot we made, notice how there was an initial, rapid decline in population size? This initial period is referred to as the "transient stage" and it's the length of time it takes before the number of animals in each stage reach their respective stable dynamics proportions. It is a delayed effect, because if the initial values we supplied were not at the stable dynamic proportions, then, for example, young animals need to grow up and die, etc., and only once the stages have stabilized, does the population at large becomes stable (in this example with gemsbok, "stable" would mean a stable decline).
+
+Once the population has the correct proportion of animals in each stage, we see a curved decline, but despite being curved, it's actually stable. Stable in this case means that the same percentage of the population is lost each year (19% based on the $\lambda$ eigenvalue).
+
+We can visualize this "stability" another way, by using the `plot()`, but this time using an additional argument, `log = "y"`, which will show the same data as before but this time as a logarithmic transformation of the number of animals. Doing so will help show that stable decline:
+
+```{r}
+plot(business_as_usual, log = "y")
+```
+
+Plotting the data in ths way let's us see that constant and stable 19% decline each year quite clearly, following the initial period of instability.
+
+What's obvious from both of these figures is that this gemsbok population is not long for this world. Hence some sort of conservation may be called for.
+
+\newpage
+
+# Testing conservation actions
+
+Let's imagine that it's feasible to increase adult survival - an imaginary study found that immunising adults against _Nastius_ _diseasius_ increased survival by 5%. While it may sound like something that should help save this population, we don't know if a 5% increase in survival would be enough  to reverse the entire population decline (hence a matrix model may be useful, hint-hint).
+
+What we can do now is "play God" and rerun our simulation to take this 5% increase in adult survival into account.
+
+You may remember that we can add stored values with new ones, meaning that to increase survival by 5%, we could simply do: `phi_a + 0.05`. We could create an entirely new stored value by doing `phi_a_new <- phi_a + 0.05`, or we could do this while also creating a new matrix. I'll use the second option here, but either are fine.
+
+However we decide to change adult survival, it is incredibly important to rename our matrix, something like `gemsbok_adult_surv`. If I did not do this, then the matrix `gemsbok` we created above would be overwritten, meaning that if we ever wanted to compare the original matrix (where $\phi_a = 0.75$) matrix with the new matrix with increased adult survival ($\phi_a = 0.8$), we'd have to rerun all the code above a second time. 
+
+Rerunning code like that is not an issue for `R`, but it does create more work for yourself later on and introduces some pretty big risks of getting models mixed up. It's always good practice to rename objects when you run different versions of them.
+
+```{r}
+gemsbok_adult_surv <- as.matrix(           # Convert to matrix
+  data.frame(                              # Create a dataframe
+                 # Repro   Trans   Remain 
+    yearlings  = c(0,      G_y,    0),      
+    sub_adults = c(F_sa,   phi_sa, G_sa),
+    adults     = c(F_a,    0,      phi_a + 0.05)   # Simply adding 0.05 to phi_a
+  )
+)
+
+row.names(gemsbok_adult_surv) <- colnames(gemsbok_adult_surv) # Use the column names to name the rows
+
+gemsbok_adult_surv # Show what above code has created
+```
+
+And just like that we've got a new "survival" rate of 0.80 for adults.
+
+## Conservation action eigenvalues
+
+We'll run through the same steps from above, just without the explanations. Note that in the `eigs()` function below we're using `"all"` to just quickly give us all three eigenvalues in one line of code.
+
+```{r}
+eigs(A = gemsbok_adult_surv, what = "all")
+```
+
+Looks like $\lambda$ has increased from 0.82 to 0.86. Just from this calculation, we can get a feel for what's going to be coming next (i.e. things are still not looking great for the long term prospects of the population given $\lambda < 1$).
+
+## Running the new matrix model
+
+### Population size at time 0
+
+We keep the same number of animals in each stage (so technically we don't need to run this as `R` has stored this value in the environment, but what's it hurt?).
+
+```{r}
+numbers_at_stage <- c(
+  20, # Number of yearlings
+  15, # Number of subadults
+  10  # Number of adults
+)
+```
+
+### The actual model
+
+I'll call this model output something new so that we can distinguish between our new matrix and our original one.
+
+```{r}
+a_new_hope <- project(A = gemsbok_adult_surv, vector = numbers_at_stage, time = 25)
+```
+
+And I'll jump straight to plotting the prediction:
+
+```{r}
+plot(a_new_hope)
+```
+
+Doesn't look like increasing adult survival by 5% will be enough - the population is still doomed. Bad news for this population, but in terms of ensuring that conservation is as efficient as we can possibly make it, this is incredibly valuable information. It allows us to say "Don't spend money trying to increase adult survival by 5% because that won't be enough. You either need to do more, or just let this one go."
+
+#### Questions
+
+1. Under normal circumstances, how many years would it take for the population to go extinct?
+
+2. Under improved circumstances (increased survival), how many years would it take for the population to go extinct?
+
+\newpage
+
+# Practical instructions
+
+## Task 1: 
+
+Rerun the above gemsbok example and find values for vital rates that lead to the population being stable ($\lambda = 1$)
+
+## Task 2: 
+
+Rerun the above gemsbok example and find how values for vital rates that lead to the population growth ($\lambda > 1$)
+
+## Task 3:
+
+Go to https://compadre-db.org
+
+This link takes you to a website called `Compadre`, which is a freely available online data base, built and maintained by Dave Hodgson _et_ _al._ (one of the authors of the `popdemo` package). Have a quick glance around the site to see how complex, or simple, real world matrix models can be (DATA > EXPLORE DATABASE). This site may be useful for getting surrogate vital rates for your projects (see below).
+
+## (Optional) Task 4:
+
+Build a new matrix model for black bears (_Ursus_ _americanus_)
+
+* Go to https://compadre-db.org/Species/48187
+
+* Scroll down to Bow Valley / Ursus americanus on the Compadre website
+
+* Use this information to do a projection
+
+* What are the eigenvalues for this population of bears?
+
+* What are the long term prospects for this population?
+
+* Where would you focus conservation or management efforts (i.e. which vital rate)?
+
+## Task 5:
+
+Begin making predictions for the Amami rabbit population.
+
+* Note that you do not have information on two key pieces of information:
+
+  - The number of offspring produced on average
+  
+  - The sex ratio
+  
+* You have two options for the number of offspring produced:
+  
+  - Either find this value in a paper or secondary source (e.g., websites)
+  
+  - Use a surrogate value. For instance, find a species which you believe are somewhat analogous to Amami rabbits, and use their fecundity rate as a surrogate. While using surrogate values is by no means ideal, if you decide not to use surrogates, then your only option would be to go and collect this data. Given the risk of extinction, you won't always have the luxury of getting "one-more-bit-of-data".
+  
+* Your options for sex ratio:
+
+  - Find the sex ratio in a paper or secondary source
+ 
+  - Use a surrogate sex ratio
+ 
+  - Assume a sex ratio of 0.5 (half the population are females, half are males), which is often a "safe"-ish bet
+
+* Note that in the gemsbok example, subadults could remain subadults, but this is not the case for the Amami rabbits. The Amami rabbit matrix should look like:
+
+$$
+\mathcal{A} = 
+\left(\begin{array}{ccc} 
+0&F_{sa}& F_a\\
+G_y&0&0\\
+0&G_{sa}&\phi_a
+\end{array}\right)
+$$
+
+
+
+
+
+
+
+
