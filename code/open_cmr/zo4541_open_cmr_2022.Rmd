@@ -10,6 +10,59 @@ library(ids)
 library(tidyverse)
 ```
 
+# Request
+
+Please do not share this document with the students. This is only for your use, either to get a sense of the data or as a crib sheet with information to pass on to students.
+
+# Open CMR data
+
+## What are open CMR models?
+
+* "Open" in open CMR means that the population was open to change, meaning that animals can be born and die. We assume that immigration and emigration are negligible (or at least we hope and pray they are).
+
+* Figuring out what the survival probability of an animal can be hugely valuable for conservation or management, e.g., if your population is crashing, is it because survival has taken a hit?
+
+* The issue is that to figure out survival, you need to take _imperfect detection_ into account.
+
+  + Did you _not see_ an animal because it was dead, or because it didn't enter your trap that day?
+
+* There are a variety of open CMR models. The one used in this practical is the "bog standard" one (at least to my mind). The Cormack-Jolly-Seber model (abbreivated to to CJS, named after the authors).
+
+* Open capture mark recapture models are state-spaced models which allow the estimation of survival rates.
+
+  + State spaced means that the animals can "occupy" one of of multiple states. In open CMR models, these states are __Alive__ or __Dead__.
+
+  + Animals can transition between states (e.g., __Sleeping__ to __Moving__ to __Foraging__, as in Hidden Markov Chain models [HMMs], or __Ocupied__ to __Vacant__ to __Occupied__, as in occupancy models), but in open CMR models, the only transition can be from __Alive__ to __Dead__.
+
+  + Zombies do not exist, so an animal cannot go from __Dead__ to __Alive__.
+
+## What parameters are estimated?
+
+* Open CMR models estimate survival probabilities and recapture probabilities.
+
+  + Note that we rarely care about recapture probabilities, they are only included to deal with _imperfect detection_ (though if you are designing a new type of trap, for example, you would care about recapture probabilities).
+
+  + The reason why we only care about recapture probabilities, and not initial capture probabilities, is that you do not care about what the probability was for an animal to enter your trap initially (this does not help you determine an animals survival, all it tells you is that that particular animal was alive, which you know already because it went into your trap). 
+  
+  + Instead, you need to know the probability that it _re-entered_ your trap. With this information you can help tease apart if the animal was alive and observed, alive and unobserved, or dead and unobserved).
+
+* The two parameters are estimated together in two sub-models.
+
+  + The state process model deals with survival, where, if the animal was alive (`1`), then this is multiplied by the survival probability (assume 87%) to determine if the animal was likely to be alive the following year: $1 \times 0.87 = 0.87$. If the animal is dead, then the state is `0`, leading to $0 \times 0.87 = 0$.
+  
+  + The observation process model deals with whether or not the animal was recaptured. If the animal was likely to be alive (this is known to be true when the animal is captured), then the state is multiplied by the recapture probability. Assume the recapture probability is 32%, then if the animal was likely alive $1 \times 0.32 = 0.32$ or if it was dead $0 \times 0.32 = 0.32$. This is how open CMR models deal with animals who may or may not be alive, as well as observed or not (so long as it was alive to be observed). 
+
+## The data
+
+* As with closed CMR models, open CMR uses capture history (e.g., where `110` represented that an animal was capture on day 1 and day 2, but it was not captured on day 3).
+
+* Because we only care about recapture, if we have 20 years of capture histories, only 19 years are actually used to estimate recapture, as the first year would represent the initial capture probability.
+
+* Similarly, because survival is the probability to successfully transition from one year to the next (and in doing so survive), if we have 20 years of data, we only have 19 transitions.
+
+* This is why when you biuld models in `MARK`, your matrices will be shortened by one year for both recapture and survival probabilities.
+
+# Simulate the data
 
 # CJS Open CMR
 
@@ -42,26 +95,14 @@ marked_adult <- rpois(n = n_years - 1, lambda = 25)
 ```{r}
 set.seed(666)
 
-# Phi covariates ----------------------------------------------------------
-# Mongoose predation
-mongoose <- rbinom(n = n_years, size = 1, prob = plogis(4 + -0.38 * 1:n_years))
-
-beta_mongoose <- -0.36                               # -0.3 gradient for yearlings
-
-# Nearest human infrastructure (km)
-trend <- 0.5                                         # Humans get 0.5 km closer every year
-human <- 10 -cumsum(rnorm(n_years, 0.1) + trend) # Distance from the site
-
-beta_human <- 0.01                                   # 0.02 gradient
-
 # One year old survival (in normal circumstance)
-mean_phi_1 <- 0.54
+mean_phi_1 <- 0.49
 
 # Two year old survival (in normal circumstances)
-mean_phi_2 <- 0.69
+mean_phi_2 <- 0.64
 
 # Adult survival (in normal circumstances)
-mean_phi_adult <- 0.87
+mean_phi_adult <- 0.82
 
 # survival of rabbits as they age
 # Takes into account that animals grow up each year
@@ -107,9 +148,29 @@ P_A <- matrix(rep(p, sum(marked_adult)),
 
 ## True survival
 
+### Covariates influencing survival
+
+```{r}
+set.seed(666)
+# Phi covariates ----------------------------------------------------------
+# Mongoose predation
+mongoose <- rbinom(n = n_years, size = 1, prob = plogis(4 + -0.38 * 1:n_years))
+
+beta_mongoose <- -0.035
+
+# Nearest human infrastructure (km)
+trend <- 0.5                                         # Humans get 0.5 km closer every year
+human <- 10 -cumsum(rnorm(n_years, 0.1) + trend) # Distance from the site
+
+beta_human <- 0.006
+```
+
+
 ### One year old
 
 ```{r}
+# Aiming for one year old survival of 0.52 at the lowest
+
 # Define matrices with survival and recapture probabilities
 # One year olds
 PHI_1 <- matrix(0,                      # Fill the matrix with zeros initially
@@ -136,6 +197,8 @@ for(i in 1:ncol(PHI_1)){
 ### Two year old
 
 ```{r}
+# Aiming for two year old survival of 0.62 at the lowest
+
 # Code the same as for one year olds
 PHI_2 <- matrix(0, 
                 ncol = n_years - 1, 
@@ -156,6 +219,7 @@ for(i in 1:ncol(PHI_2)){
 ### Adults
 
 ```{r}
+# AIming for adult survival of 0.83 at the lowest
 PHI_a <- matrix(rep(phi_adult, sum(marked_adult)), 
                 ncol = n_years - 1,
                 nrow = sum(marked_adult), 
@@ -369,13 +433,134 @@ CH_df <- CH_df[, c(17, 1:16)]
 
 # Figures
 
-```{r}
-plot_df <- matrix(data = NA,
-                  ncol = ncol(PHI_1),
-                  nrow = 3)
+```{r, warning = FALSE, message=FALSE}
+df <- data.frame(
+  age = c(rep("One", 16), rep("Two", 16), rep("Adult", 16)),
+  year = c(2007:2022, 2007:2022, 2007:2022),
+  survival = c((mean_phi_1 + beta_mongoose * mongoose + beta_human * human),
+               (mean_phi_2 + beta_mongoose * mongoose + beta_human * human),
+               (mean_phi_adult + beta_mongoose * mongoose + beta_human * human)),
+  mongoose = c(mongoose, mongoose, mongoose),
+  human = c(human, human, human)
+)
 
-for(i in 1:ncol(PHI_1)){
-  plot_df[,i] <- unique(PHI_1[,i])
-}
+df$mean_phi <- c(rep(mean_phi_1, 16), rep(mean_phi_2, 16), rep(mean_phi_adult, 16))
+df$low_phi <- c(rep(0.52, 16), rep(0.62, 16), rep(0.83, 16))
+
+ggplot(df) +
+  geom_point(aes(x = year, y = survival, colour = age),
+             size = 2) +
+  geom_path(aes(x = year, y = survival, colour = age)) +
+  geom_ribbon(aes(x = year, y = survival, ymax = mean_phi, ymin = low_phi, fill = age), alpha = 0.2) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "Year",
+       y = "Survival",
+       colour = "Age") +
+  scale_colour_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_bw() +
+  theme_minimal()
+
+df$mongoose <- ifelse(df$mongoose == 1, "Mongoose Present", "Mongoose Absent")
+
+df %>% 
+  group_by(age) %>% 
+  summarise(mean_survival = mean(survival),
+            min_survival = min(survival),
+            max_survival = max(survival))
+
+ggplot(df) +
+  geom_point(aes(x = human, y = survival, colour = age),
+             size = 2) +
+  geom_smooth(aes(x = human, y = survival, colour = age),
+              method = "lm") +
+  geom_ribbon(aes(x = human, y = survival, ymax = mean_phi, ymin = low_phi, fill = age), alpha = 0.2) +
+  scale_y_continuous(labels = scales::percent) +
+  facet_grid( ~ mongoose) +
+  labs(x = "Distance to humans",
+       y = "Survival",
+       colour = "Age",
+       fill = "Age") +
+  scale_colour_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_bw() +
+  theme_minimal()
+```
+
+## Population trends
+
+### Minimum survival
+
+```{r}
+# Minimum survival
+numbers_at_stage <- c(58, 33, 159)
+
+phi_1 <- min(df$survival[df$age == "One"])
+phi_2 <- min(df$survival[df$age == "Two"])
+phi_a <- min(df$survival[df$age == "Adult"])
+
+F_2 <- m_2 * phi_1 * sigma
+F_a <- m_a * phi_1 * sigma
+
+rabbit <- as.matrix(data.frame(
+  one = c(0, phi_1, 0),
+  two = c(F_2, 0, phi_2),
+  adults = c(F_a, 0, phi_a)
+))
+
+mini <- project(A = rabbit, vector = numbers_at_stage, time = 25)
+
+# mean survival
+phi_1 <- mean(df$survival[df$age == "One"])
+phi_2 <- mean(df$survival[df$age == "Two"])
+phi_a <- mean(df$survival[df$age == "Adult"])
+
+F_2 <- m_2 * phi_1 * sigma
+F_a <- m_a * phi_1 * sigma
+
+rabbit <- as.matrix(data.frame(
+  one = c(0, phi_1, 0),
+  two = c(F_2, 0, phi_2),
+  adults = c(F_a, 0, phi_a)
+))
+
+avg <- project(A = rabbit, vector = numbers_at_stage, time = 25)
+
+# maximum survival
+phi_1 <- max(df$survival[df$age == "One"])
+phi_2 <- max(df$survival[df$age == "Two"])
+phi_a <- max(df$survival[df$age == "Adult"])
+
+F_2 <- m_2 * phi_1 * sigma
+F_a <- m_a * phi_1 * sigma
+
+rabbit <- as.matrix(data.frame(
+  one = c(0, phi_1, 0),
+  two = c(F_2, 0, phi_2),
+  adults = c(F_a, 0, phi_a)
+))
+
+maxi <- project(A = rabbit, vector = numbers_at_stage, time = 25)
+
+
+
+df_min <- data.frame(
+  population = c(mini@.Data, avg@.Data, maxi@.Data),
+  years = rep(1:length(mini@.Data), 3),
+  model = c(rep("Minimum survival", length(mini@.Data)),
+            rep("Mean survival", length(mini@.Data)),
+            rep("Maximum survival", length(mini@.Data)))
+)
+
+ggplot(df_min) +
+  geom_point(aes(x = years, y = population, colour = model)) +
+  geom_path(aes(x = years, y = population, colour = model)) +
+  ylim(c(0, 275)) +
+  labs(y = "Population size",
+       x = "Years into future",
+       colour = "Variation in survival") +
+  scale_colour_brewer(palette = "Set2") +
+  theme_bw() +
+  theme_minimal()
 ```
 
