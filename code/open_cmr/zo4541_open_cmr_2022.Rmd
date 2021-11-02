@@ -492,7 +492,7 @@ df$age <- factor(df$age, levels = c("One", "Two", "Adult"))
 df$mean_phi <- c(rep(mean_phi_1, 16), rep(mean_phi_2, 16), rep(mean_phi_adult, 16))
 df$low_phi <- c(rep(0.52, 16), rep(0.62, 16), rep(0.83, 16))
 
-ggplot(df) +
+plotly::ggplotly(ggplot(df) +
   geom_point(aes(x = year, y = survival, colour = age),
              size = 2) +
   geom_path(aes(x = year, y = survival, colour = age)) +
@@ -506,6 +506,7 @@ ggplot(df) +
   scale_fill_brewer(palette = "Set2") +
   theme_bw() +
   theme_minimal()
+)
 ```
 
 ## Summary table of survival
@@ -526,8 +527,8 @@ df %>%
 
 Figure below shows impact of all three covariates (age, mongoose presence, and distance to humans). Note here that increasing human distance is good, hence the parameter is positive. Be sure to explain to students that this is bad, because the raw data shows humans getting _closer_, not further away.
 
-```{r}
-ggplot(df) +
+```{r, message = FALSE, warning=FALSE}
+plotly::ggplotly(ggplot(df) +
   geom_point(aes(x = human, y = survival, colour = age),
              size = 2) +
   geom_smooth(aes(x = human, y = survival, colour = age),
@@ -543,6 +544,7 @@ ggplot(df) +
   scale_fill_brewer(palette = "Set2") +
   theme_bw() +
   theme_minimal()
+)
 ```
 
 ## Population trends
@@ -617,7 +619,7 @@ df_min <- data.frame(
             rep("Maximum survival", length(mini@.Data)))
 )
 
-ggplot(df_min) +
+plotly::ggplotly(ggplot(df_min) +
   geom_point(aes(x = years, y = population, colour = model)) +
   geom_path(aes(x = years, y = population, colour = model)) +
   ylim(c(0, 275)) +
@@ -627,5 +629,6 @@ ggplot(df_min) +
   scale_colour_brewer(palette = "Set2") +
   theme_bw() +
   theme_minimal()
+)
 ```
 
