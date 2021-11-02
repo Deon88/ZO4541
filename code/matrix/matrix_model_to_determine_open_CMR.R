@@ -23,7 +23,7 @@ rabbit <- as.matrix(data.frame(
 
 row.names(rabbit) <- colnames(rabbit)
 
-eigs(A = rabbit)
+40 * eigs(A = rabbit, what = "ss")
 
 numbers_at_stage <- c(
   58,
