@@ -123,6 +123,8 @@ phi_adult <- rep(mean_phi_adult, n_years - 1)
 
 ## Detection
 
+Note that detection is kept constant. I could include some covariate to influence detection, but I'm inclined to leave it as is. Let me know if you have strong feelings on this.
+
 ### One year olds
 
 ```{r}
@@ -160,16 +162,39 @@ P_A <- matrix(rep(p, sum(marked_adult)),
 
 ### Covariates influencing survival
 
+There are three covariates that have an effect on rabbit survival.
+
+* The first is rabbit age. This was specified above, but acts as a contrast treatment. One year olds have the lowest, two-year olds have "medium" survival, and adults have the highest.
+
+* The second is mongoose presence, where mongoose presence lowers survival by 3.5%. This acts as another contrast treatment.
+
+* The final is distance from human building. This is a conceptually challenging covariate and can be easily misinterpreted by students. Human distance is a proxy variable (i.e., a variable which captures another variable). Here, human distance is meant to be a proxy for cat and dog proximity - both of which are a legitimate threat to the rabbits in real life. So part of the confusion comes from this being a proxy variable. The other part which causes confusion is that humans are getting closer each year - so a decreasing trend in human distance over time. However, the relationship with rabbit survival is positive. Keep in mind, however, that this means that the larger the value for human distance, the larger survival is. You want humans far away (because of their pets), but they are moving closer each year.
+
+When we run this practical, make sure to go over this detail with the students and make sure they understand it. Last year, it caused a few of them to get confused. I choose to keep it in this year, because it requires genuine thought to make sense of it.
+
+Mongoose presence is determine as $logit(p_i) = 4 - 0.38 \times Year_i$, so probability of mongoose presence declines over the years. This reflects the control of mongoose in the site.
+
+Human distance is a declining trend as well, based on the negative cumulative sum of the previous year and a trend (see the code).
+
+Survival is generated according to:
+
+$\phi_i \sim binomial(p_i)$
+
+$p_i = \beta_0 + \beta_12YearOld_i + \beta_2Adult_i + \beta_3Mongoose_i + \beta_4Human_i$
+
+where $\phi_i$ is whether a rabbit survives or not ($\phi$ = phi), $p_i$ is the probability that the rabbit survives, $\beta_0$ is the global intercept, which defaults to one year old survival here, $\beta_1$ is the change in survival for two year olds, $2YearOld_i$ is a dummy variable indicating if rabbit $i$ is a two year old (1) or not (0), $\beta_2$ is the change in survival for adults, $Adult_i$ is a dummy variable for rabbit $i$ being an adult, $\beta_3$ is the effect of mongoose on rabbit $i$, $Mongoose_i$ is dummy variable indicating whether rabbit $i$ was exposed to mongoose, $\beta_4$ is the effect of human distance (and hence pets), and $Human_i$ is the distance humans were from the site.
+
+The values for the various $\beta_k$ are included in the code below, though the exact values of these may alter very slightly with any updates.
+
 ```{r}
 set.seed(666)
-# Phi covariates ----------------------------------------------------------
 # Mongoose predation
 mongoose <- rbinom(n = n_years, size = 1, prob = plogis(4 + -0.38 * 1:n_years))
 
 beta_mongoose <- -0.035
 
 # Nearest human infrastructure (km)
-trend <- 0.5                                         # Humans get 0.5 km closer every year
+trend <- 0.5                                     # Humans get 0.5 km closer every year
 human <- 10 -cumsum(rnorm(n_years, 0.1) + trend) # Distance from the site
 
 beta_human <- 0.006
@@ -243,7 +268,7 @@ for(i in 1:ncol(PHI_a)){
 
 # CJS simulation function
 
-This function comes from Olivier Giminez, but I can't remember where from exactly.
+The base version of this code comes from Olivier Giminez, I think from his online Bayesian CMR course but I may be wrong.
 
 ```{r}
 simul.cjs <- function(PHI, P, marked) { # User must provide the survival and recapture matrices, as well as the number of marked animals
@@ -277,6 +302,8 @@ simul.cjs <- function(PHI, P, marked) { # User must provide the survival and rec
 ```
 
 # Simulate capture histories
+
+Use the information from above to generate actual capture histories for the various rabbits.
 
 ```{r}
 set.seed(666)
@@ -335,11 +362,11 @@ for(i in 1:nrow(CH_A)){
 } #i
 ```
 
-# Store data
+# Store and tidy data
 
 ## Age
 
-Age when first captured. Note that the data does not include 2022, because this is a transition. So, the column `2007` could be viewed as age during transition from 2007 to 2008
+This is age when the rabbit was first captured, to be used in the `.INP` file as a group.
 
 ```{r}
 set.seed(666)
@@ -375,6 +402,8 @@ age <- age[, c(16, 1:15)]
 
 ## Mongoose presence
 
+This is constant for all rabbits. Mongoose were either present, and impacted all rabbits or they were not.
+
 ```{r}
 set.seed(666)
 
@@ -400,6 +429,8 @@ mongoose_df <- mongoose_df[, c(17, 1:16)]
 ```
 
 ## Distance to humans
+
+Humans getting closer to the site over time, lowering survival. Keep in mind this reflects predation by pets, and maybe the odd human every now and again...
 
 ```{r}
 human_df <- matrix(NA, 
@@ -441,6 +472,10 @@ CH_df <- CH_df[, c(17, 1:16)]
 
 # Figures
 
+## Survival over time
+
+The ribbons here are the survival rates I was targetting based on the matrix models. The upper part of the ribbon results in a stable population, the bottom of the ribbon results in a slowly declining population (still extant after 25 years).
+
 ```{r, warning = FALSE, message=FALSE}
 df <- data.frame(
   age = c(rep("One", 16), rep("Two", 16), rep("Adult", 16)),
@@ -451,6 +486,8 @@ df <- data.frame(
   mongoose = c(mongoose, mongoose, mongoose),
   human = c(human, human, human)
 )
+
+df$age <- factor(df$age, levels = c("One", "Two", "Adult"))
 
 df$mean_phi <- c(rep(mean_phi_1, 16), rep(mean_phi_2, 16), rep(mean_phi_adult, 16))
 df$low_phi <- c(rep(0.52, 16), rep(0.62, 16), rep(0.83, 16))
@@ -463,12 +500,19 @@ ggplot(df) +
   scale_y_continuous(labels = scales::percent) +
   labs(x = "Year",
        y = "Survival",
-       colour = "Age") +
+       colour = "Age",
+       fill = "Age") +
   scale_colour_brewer(palette = "Set2") +
   scale_fill_brewer(palette = "Set2") +
   theme_bw() +
   theme_minimal()
+```
 
+## Summary table of survival
+
+A table summarising the range of true survivals over time. Variation is caused exclusively by age, mongoose presence, and human distance. These are not estimates, they are the actual values.
+
+```{r}
 df$mongoose <- ifelse(df$mongoose == 1, "Mongoose Present", "Mongoose Absent")
 
 df %>% 
@@ -476,7 +520,13 @@ df %>%
   summarise(mean_survival = mean(survival),
             min_survival = min(survival),
             max_survival = max(survival))
+```
 
+## All variables
+
+Figure below shows impact of all three covariates (age, mongoose presence, and distance to humans). Note here that increasing human distance is good, hence the parameter is positive. Be sure to explain to students that this is bad, because the raw data shows humans getting _closer_, not further away.
+
+```{r}
 ggplot(df) +
   geom_point(aes(x = human, y = survival, colour = age),
              size = 2) +
@@ -497,7 +547,9 @@ ggplot(df) +
 
 ## Population trends
 
-### Minimum survival
+The figure below is generated using matrix models. I assume a sex ratio of 50%, 1.1 offspring produced per year, and use the survival rates from the above table.
+
+The average survival shows that the population is declining because both mongoose and humans negatively effect survival, and either one is generally "active" (i.e., something is always lowering survival). When humans are still far away and mongoose are not having an effect (the maximum survival), the survival rates lead to a stable population.
 
 ```{r}
 # Minimum survival
