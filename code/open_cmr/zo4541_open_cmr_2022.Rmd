@@ -1,13 +1,24 @@
 ---
 title: "Open CMR simulation"
 author: "Deon Roos"
-date: "02/11/2021"
-output: html_document
+date: "Script last run on `r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    highlight: monochrome
+    code_folding: hide
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    df_print: paged
 ---
 
 ```{r, message = FALSE, warning=FALSE}
 library(ids)
 library(tidyverse)
+library(popdemo)
 ```
 
 # Request
@@ -18,55 +29,54 @@ Please do not share this document with the students. This is only for your use, 
 
 ## What are open CMR models?
 
-* "Open" in open CMR means that the population was open to change, meaning that animals can be born and die. We assume that immigration and emigration are negligible (or at least we hope and pray they are).
+* "Open" in open CMR means that the population is open to change, therefore we assume that animals can be born and die. We assume (read "we hope and pray") that immigration and emigration are negligible and can be ignored.
 
-* Figuring out what the survival probability of an animal can be hugely valuable for conservation or management, e.g., if your population is crashing, is it because survival has taken a hit?
+* Figuring out what the survival probability of a group of animals is, can be hugely valuable for conservation or management, e.g., if your population is crashing, is it because survival has taken a hit?
 
 * The issue is that to figure out survival, you need to take _imperfect detection_ into account.
 
-  + Did you _not see_ an animal because it was dead, or because it didn't enter your trap that day?
+  + For instance, did you _not see_ an animal because it was dead, or because it simply didn't enter your trap that day?
+  
 
-* There are a variety of open CMR models. The one used in this practical is the "bog standard" one (at least to my mind). The Cormack-Jolly-Seber model (abbreivated to to CJS, named after the authors).
+* There are a variety of open CMR models. The one used in this practical is the "bog standard" one (at least to my mind). The Cormack-Jolly-Seber model (abbreivated to to CJS, named after the authors, though I often mistakenly call it the Colly-Jolly-Seber model).
 
-* Open capture mark recapture models are state-spaced models which allow the estimation of survival rates.
+* Open CMR models are state-spaced models which allow the estimation of survival rates.
 
-  + State spaced means that the animals can "occupy" one of of multiple states. In open CMR models, these states are __Alive__ or __Dead__.
+  + A state space model is merely one whereby an animals can "occupy" one of of multiple states. In open CMR models, these states are __Alive__ or __Dead__.
 
   + Animals can transition between states (e.g., __Sleeping__ to __Moving__ to __Foraging__, as in Hidden Markov Chain models [HMMs], or __Ocupied__ to __Vacant__ to __Occupied__, as in occupancy models), but in open CMR models, the only transition can be from __Alive__ to __Dead__.
 
   + Zombies do not exist, so an animal cannot go from __Dead__ to __Alive__.
 
-## What parameters are estimated?
+## Which parameters are estimated?
 
 * Open CMR models estimate survival probabilities and recapture probabilities.
 
-  + Note that we rarely care about recapture probabilities, they are only included to deal with _imperfect detection_ (though if you are designing a new type of trap, for example, you would care about recapture probabilities).
+  + Note that we rarely care about recapture probabilities, they are only included to deal with _imperfect detection_ (though if you are designing a new type of trap, for example, you might care about recapture probabilities).
 
-  + The reason why we only care about recapture probabilities, and not initial capture probabilities, is that you do not care about what the probability was for an animal to enter your trap initially (this does not help you determine an animals survival, all it tells you is that that particular animal was alive, which you know already because it went into your trap). 
+  + The reason why we only care about recapture probabilities, and not initial capture probabilities, is that you do not care about what the probability was for an animal to enter your trap initially. This does not help you determine if an animals survival. All it tells you is that that particular animal was alive, which you know already because it went into your trap. 
   
-  + Instead, you need to know the probability that it _re-entered_ your trap. With this information you can help tease apart if the animal was alive and observed, alive and unobserved, or dead and unobserved).
+  + Instead, you need to know the probability that it _re-entered_ your trap (or you detected it having put a radio-collar on, or however you are doing "trapping"). With this information you can help tease apart if the animal was alive and observed, alive and unobserved, or dead and unobserved.
 
 * The two parameters are estimated together in two sub-models.
 
-  + The state process model deals with survival, where, if the animal was alive (`1`), then this is multiplied by the survival probability (assume 87%) to determine if the animal was likely to be alive the following year: $1 \times 0.87 = 0.87$. If the animal is dead, then the state is `0`, leading to $0 \times 0.87 = 0$.
+  + The state process model deals with survival, where, if the animal was alive (state = `1`), then this is multiplied by the survival probability (assume 87%) to determine if the animal was likely to be alive the following year: $1 \times 0.87 = 0.87$. If the animal is dead (state = `0`), then this resolves to $0 \times 0.87 = 0$.
   
-  + The observation process model deals with whether or not the animal was recaptured. If the animal was likely to be alive (this is known to be true when the animal is captured), then the state is multiplied by the recapture probability. Assume the recapture probability is 32%, then if the animal was likely alive $1 \times 0.32 = 0.32$ or if it was dead $0 \times 0.32 = 0.32$. This is how open CMR models deal with animals who may or may not be alive, as well as observed or not (so long as it was alive to be observed). 
+  + The observation process model deals with whether or not the animal was recaptured, but this must be conditioned on whether the animal was alive or not. Dead animals have a hard time entering a trap. If the animal was likely to be alive, then the state is multiplied by the recapture probability. Assume the recapture probability is 32%, then if the animal was alive; $1 \times 0.32 = 0.32$, while if it were dead; $0 \times 0.32 = 0.32$. This is how open CMR models deal with animals who may or may not be alive, as well as observed or not (so long as it was alive to be observed). It also ensures that that dead animals cannot be captured.
 
 ## The data
 
 * As with closed CMR models, open CMR uses capture history (e.g., where `110` represented that an animal was capture on day 1 and day 2, but it was not captured on day 3).
 
-* Because we only care about recapture, if we have 20 years of capture histories, only 19 years are actually used to estimate recapture, as the first year would represent the initial capture probability.
+* Because we only care about recapture, if we have 20 years of capture histories, only 19 years are actually used to estimate recapture, as the first year would represent the initial capture probability. So for a CH of `110`, the only information used for recapture probability is `-10`.
 
-* Similarly, because survival is the probability to successfully transition from one year to the next (and in doing so survive), if we have 20 years of data, we only have 19 transitions.
+* Similarly, because survival is the probability to successfully transition from one year to the next (and in doing so survive), if we have 20 years of data, we only have 19 transitions. For a CH of `110`, the information used is the first transition, `11`, and then the second transition `10`.
 
 * This is why when you biuld models in `MARK`, your matrices will be shortened by one year for both recapture and survival probabilities.
 
 # Simulate the data
 
-# CJS Open CMR
-
-# Parameters and covariates
+Below is the code used to simulate the open CMR data as will be used by the students. Note that the code here is much more complex and involved than the closed CMR simulation, partly because the actual simulation is more complex but also because I am also not a particularly elegant coder. I have tried to comment as much as possible to make it relatively transparent, though there is one section where I can't remember how I came up with the code. This section falls very much into the "I don't know why it works but it does, so don't touch it" (the section where I get the numerical age of the rabbits).
 
 ## Years and number of captures
 
@@ -334,8 +344,6 @@ Age when first captured. Note that the data does not include 2022, because this 
 ```{r}
 set.seed(666)
 
-# Covariate extraction ----------------------------------------------------
-
 # Unique animal IDs
 rabbit_names <- adjective_animal(n = nrow(CH))
 
@@ -498,6 +506,11 @@ numbers_at_stage <- c(58, 33, 159)
 phi_1 <- min(df$survival[df$age == "One"])
 phi_2 <- min(df$survival[df$age == "Two"])
 phi_a <- min(df$survival[df$age == "Adult"])
+
+sigma <- 0.5
+
+m_2 <- 1.1
+m_a <- 1.1
 
 F_2 <- m_2 * phi_1 * sigma
 F_a <- m_a * phi_1 * sigma
