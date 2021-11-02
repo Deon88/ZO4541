@@ -1,0 +1,381 @@
+---
+title: "Open CMR simulation"
+author: "Deon Roos"
+date: "02/11/2021"
+output: html_document
+---
+
+```{r, message = FALSE, warning=FALSE}
+library(ids)
+library(tidyverse)
+```
+
+
+# CJS Open CMR
+
+# Parameters and covariates
+
+## Years and number of captures
+
+```{r}
+# Setting the seed keeps the randomness consistent
+set.seed(666)
+
+# How many years of data we will simulate
+n_years <- 16
+
+# Year that data collection started
+start_year <- 2007
+
+# Number of new individuals in each each age group captured each year
+  # Number drawn from a poission distribution (rpois)
+  # We generate n_years - 1 values (15 years of new captures)
+  # We capture on average 9 one year olds (lambda = 9)
+  # Values for lambda informed from a matrix model to get age structure based on survivals
+marked_one <- rpois(n = n_years - 1, lambda = 9)
+marked_two <- rpois(n = n_years - 1, lambda = 5)
+marked_adult <- rpois(n = n_years - 1, lambda = 25)
+```
+
+## Mean survival
+
+```{r}
+set.seed(666)
+
+# Phi covariates ----------------------------------------------------------
+# Mongoose predation
+mongoose <- rbinom(n = n_years, size = 1, prob = plogis(4 + -0.38 * 1:n_years))
+
+beta_mongoose <- -0.36                               # -0.3 gradient for yearlings
+
+# Nearest human infrastructure (km)
+trend <- 0.5                                         # Humans get 0.5 km closer every year
+human <- 10 -cumsum(rnorm(n_years, 0.1) + trend) # Distance from the site
+
+beta_human <- 0.01                                   # 0.02 gradient
+
+# One year old survival (in normal circumstance)
+mean_phi_1 <- 0.54
+
+# Two year old survival (in normal circumstances)
+mean_phi_2 <- 0.69
+
+# Adult survival (in normal circumstances)
+mean_phi_adult <- 0.87
+
+# survival of rabbits as they age
+# Takes into account that animals grow up each year
+phi_1 <- c(mean_phi_1, mean_phi_2, rep(mean_phi_adult, n_years - 3))
+phi_2 <- c(mean_phi_2, rep(mean_phi_adult, n_years - 2))
+phi_adult <- rep(mean_phi_adult, n_years - 1)
+```
+
+## Detection
+
+### One year olds
+
+```{r}
+set.seed(666)
+
+# Mean recapture probability is 60% (note with open CMR, we do not care about initial capture)
+p <- rep(0.6, n_years - 1)
+
+# Create a matrix and plug in all of the 60% detection probabilities
+P_1 <- matrix(rep(p, sum(marked_one)), 
+              ncol = n_years - 1, 
+              nrow = sum(marked_one), 
+              byrow = TRUE)
+```
+
+### Two year olds
+
+```{r}
+P_2 <- matrix(rep(p, sum(marked_two)), 
+              ncol = n_years - 1, 
+              nrow = sum(marked_two), 
+              byrow = TRUE)
+```
+
+### Adults
+
+```{r}
+P_A <- matrix(rep(p, sum(marked_adult)), 
+              ncol = n_years - 1, 
+              nrow = sum(marked_adult), 
+              byrow = TRUE)
+```
+
+## True survival
+
+### One year old
+
+```{r}
+# Define matrices with survival and recapture probabilities
+# One year olds
+PHI_1 <- matrix(0,                      # Fill the matrix with zeros initially
+                ncol = n_years - 1, # Number of years when rabbits could be recaptured
+                nrow = sum(marked_one)) # Total number of marked one year olds
+
+# This line of code fills the matrix with the survival of yearlings in the current year
+  # Takes into account that each year there is a new batch of babies, who will then grow up
+  # The survival rates here are just the mean survival rates for that age (given one year olds grow into 2 year olds, etc.)
+for (i in 1:length(marked_one)) {
+  PHI_1[(sum(marked_one[1:i]) - marked_one[i] + 1):sum(marked_one[1:i]), i:(n_years - 1)] <- matrix(rep(phi_1[1:(n_years - i)], 
+                                                                                                        marked_one[i]), 
+                                                                                                    ncol = n_years - i, 
+                                                                                                    byrow = TRUE)
+}
+
+# Take the mean survival and adjust them according to mongoose presence and human distance
+  # The ifelse is ensuring that we do this only for rabbits alive
+for(i in 1:ncol(PHI_1)){
+  PHI_1[,i] <- ifelse(PHI_1[,i] != 0, PHI_1[,i] + beta_mongoose * mongoose[i] + beta_human * human[i], PHI_1[,i])
+}
+```
+
+### Two year old
+
+```{r}
+# Code the same as for one year olds
+PHI_2 <- matrix(0, 
+                ncol = n_years - 1, 
+                nrow = sum(marked_two))
+
+for (i in 1:length(marked_two)) {
+  PHI_2[(sum(marked_two[1:i]) - marked_two[i] + 1):sum(marked_two[1:i]), i:(n_years - 1)] <- matrix(rep(phi_2[1:(n_years - i)], 
+                                                                                                        marked_two[i]), 
+                                                                                                    ncol = n_years - i, 
+                                                                                                    byrow = TRUE)
+}
+
+for(i in 1:ncol(PHI_2)){
+  PHI_2[,i] <- ifelse(PHI_2[,i] != 0, PHI_2[,i] + beta_mongoose * mongoose[i] + beta_human * human[i], PHI_2[,i])
+}
+```
+
+### Adults
+
+```{r}
+PHI_a <- matrix(rep(phi_adult, sum(marked_adult)), 
+                ncol = n_years - 1,
+                nrow = sum(marked_adult), 
+                byrow = TRUE)
+
+
+for(i in 1:ncol(PHI_a)){
+  PHI_a[,i] <- ifelse(PHI_a[,i] != 0, PHI_a[,i] + beta_mongoose * mongoose[i] + beta_human * human[i], PHI_a[,i])
+}
+```
+
+# CJS simulation function
+
+This function comes from Olivier Giminez, but I can't remember where from exactly.
+
+```{r}
+simul.cjs <- function(PHI, P, marked) { # User must provide the survival and recapture matrices, as well as the number of marked animals
+  
+  # How many years from the PHI matrix, plus 1 year (survival is a transition between 2 years)
+  n.occasions <- dim(PHI)[2] + 1
+  
+  # Create an empty matrix to fill with the CH
+  CH <- matrix(0, 
+               ncol = n.occasions, 
+               nrow = sum(marked))
+  
+  # Vector with numerical value of when an animal was caught
+  mark.occ <- rep(1:length(marked), 
+                  marked[1:length(marked)])
+  
+  # fill the CH matrix
+  for(i in 1:sum(marked)) {                     # For each individual in turn
+    CH[i, mark.occ[i]] <- 1                     # CH has a 1 assigned when it was caught
+    if(mark.occ[i] == n.occasions) next         # If this is the final year of trapping, skip to the next individual
+    
+    for(t in (mark.occ[i] + 1):n.occasions) {   # For each year an animal could have been alive
+      sur <- rbinom(1, 1, PHI[i,t-1])           # See if it survives based on its survival for the proceeding year
+      if(sur == 0) break                        # If it died, then stop (don't keep trying to figure out if it survived in later years)
+      rp <- rbinom(1, 1, P[i, t-1])             # If it was alive, was it caught? Uses recapture prob to determine
+      if(rp == 1) CH[i,t] <- 1                  # Assign a 1 in the capture history
+    } # close t loop
+  } # close i loop
+  return(CH)                                    # Spit out the capture history
+} # close function
+```
+
+# Simulate capture histories
+
+```{r}
+set.seed(666)
+
+# One year old CH
+CH_1 <- simul.cjs(PHI_1, P_1, marked_one)  # individuals marked as yearlings
+
+# Two year old CH
+CH_2 <- simul.cjs(PHI_2, P_2, marked_two)  # individuals marked as sub-adults
+
+# Adult CH
+CH_A <- simul.cjs(PHI_a, P_A, marked_adult)  # individuals marked as adults 
+
+# Bind the rows of each CH together
+CH <- rbind(CH_1, CH_2, CH_A)
+
+# Create vector with occasion of marking
+  # I.e., when was an animal first captured
+get.first <- function(x) min(which(x!=0))
+f_1 <- apply(CH_1, 1, get.first)
+f_2 <- apply(CH_2, 1, get.first)
+f_a <- apply(CH_A, 1, get.first)
+
+# Create empty matrices X indicating age classes which will be filled later
+x_1 <- matrix(NA, ncol = dim(CH_1)[2]-1, nrow = dim(CH_1)[1])
+x_2 <- matrix(NA, ncol = dim(CH_2)[2]-1, nrow = dim(CH_2)[1])
+x_a <- matrix(NA, ncol = dim(CH_A)[2]-1, nrow = dim(CH_A)[1])
+
+# Yearling data
+# This loop distinguishes between adult and non-adult
+for(i in 1:nrow(CH_1)){
+  for(t in f_1[i]:(ncol(CH_1) - 1)){
+    x_1[i, t] <- 3
+    x_1[i, f_1[i]] <- 1   
+  } #t
+} #i
+
+# This loop specifies of those non-adults, which were 1 year olds
+for( c in 2:ncol(x_1)){
+  x_1[,c]<- ifelse(!is.na(x_1[, c - 1]) & x_1[, c - 1] == 1, 2, x_1[, c])
+}
+
+# Adult and non-adult (here, all non-adults are 2 year olds)
+for(i in 1:nrow(CH_2)){
+  for(t in f_2[i]:(ncol(CH_2) - 1)){
+    x_2[i, t] <- 3
+    x_2[i, f_2[i]] <- 2   
+  } #t
+} #i
+
+# Which were adults
+for(i in 1:nrow(CH_A)){
+  for(t in f_a[i]:(ncol(CH_A)-1)){
+    x_a[i, t] <- 3
+  } #t
+} #i
+```
+
+# Store data
+
+## Age
+
+Age when first captured. Note that the data does not include 2022, because this is a transition. So, the column `2007` could be viewed as age during transition from 2007 to 2008
+
+```{r}
+set.seed(666)
+
+# Covariate extraction ----------------------------------------------------
+
+# Unique animal IDs
+rabbit_names <- adjective_animal(n = nrow(CH))
+
+# Starting with age
+age <- rbind(x_1, x_2, x_a)
+
+for(i in 1:ncol(age)) {
+  age[,i] <- ifelse(age[,i] == 1, 
+                    "One year old", 
+                    ifelse(age[,i] == 2,
+                           "Two year old",
+                           ifelse(age[,i] == 3,
+                                  "Adult",
+                                  age[,i])))
+}
+
+age <- as.data.frame(age) 
+age$ID <- rabbit_names
+
+seq_names <- seq(start_year, start_year + n_years - 2, 1)
+
+colnames(age)[1:length(seq_names)] <- seq_names
+
+age <- age[, c(16, 1:15)]
+
+# write.csv(age, "open_CMR_age_covariate_2022.csv", row.names = FALSE)
+```
+
+
+## Mongoose presence
+
+```{r}
+set.seed(666)
+
+mongoose_df <- matrix(NA, 
+                      ncol = n_years, 
+                      nrow = nrow(CH))
+
+for(i in 1:ncol(mongoose_df)){
+  mongoose_df[,i] <- mongoose[i]
+}
+
+mongoose_df <- as.data.frame(mongoose_df)
+
+mongoose_df$ID <- rabbit_names
+
+seq_names <- seq(start_year, start_year + n_years, 1)
+
+colnames(mongoose_df)[1:length(seq_names)] <- seq_names
+
+mongoose_df <- mongoose_df[, c(17, 1:16)]
+
+# write.csv(mongoose_df, "open_CMR_mongoose_covariate.csv", row.names = FALSE)
+```
+
+## Distance to humans
+
+```{r}
+human_df <- matrix(NA, 
+                   ncol = n_years, 
+                   nrow = nrow(CH))
+
+for(i in 1:nrow(human_df)) {
+  human_df[i,] <- human
+}
+
+human_df <- as.data.frame(human_df)
+
+human_df$ID <- rabbit_names
+
+seq_names <- seq(start_year, start_year + n_years - 1, 1)
+
+colnames(human_df)[1:length(seq_names)] <- seq_names
+
+human_df <- human_df[, c(17, 1:16)]
+
+# write.csv(human_df, "open_CMR_human_distance_covariate.csv", row.names = FALSE)
+```
+
+## Capture histories
+
+```{r}
+CH_df <- as.data.frame(CH)
+
+CH_df$ID <- rabbit_names
+
+seq_names <- seq(start_year, start_year + n_years - 1, 1)
+
+colnames(CH_df)[1:length(seq_names)] <- seq_names
+
+CH_df <- CH_df[, c(17, 1:16)]
+
+# write.csv(CH_df, "open_CMR_capture_history.csv", row.names = FALSE)
+```
+
+# Figures
+
+```{r}
+plot_df <- matrix(data = NA,
+                  ncol = ncol(PHI_1),
+                  nrow = 3)
+
+for(i in 1:ncol(PHI_1)){
+  plot_df[,i] <- unique(PHI_1[,i])
+}
+```
+
