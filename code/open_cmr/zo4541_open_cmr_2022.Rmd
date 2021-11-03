@@ -8,7 +8,7 @@ output:
     highlight: monochrome
     code_folding: hide
     toc: true
-    toc_depth: 2
+    toc_depth: 3
     toc_float:
       collapsed: false
       smooth_scroll: false
@@ -121,18 +121,23 @@ phi_2 <- c(mean_phi_2, rep(mean_phi_adult, n_years - 2))
 phi_adult <- rep(mean_phi_adult, n_years - 1)
 ```
 
+The average survival for one year olds is `r mean_phi_1*100`%, for two year olds is `r mean_phi_2*100`% and `r mean_phi_adult*100`% for adults. Note that ideally these were all originally 5% higher, but were lowered to ensure observed survivals were somewhat reasonable (i.e., did not lead to explosions of rabbits in the matrix models).
+
 ## Detection
-
-Note that detection is kept constant. I could include some covariate to influence detection, but I'm inclined to leave it as is. Let me know if you have strong feelings on this.
-
-### One year olds
 
 ```{r}
 set.seed(666)
 
 # Mean recapture probability is 60% (note with open CMR, we do not care about initial capture)
 p <- rep(0.6, n_years - 1)
+```
 
+
+Note that detection is kept constant at `r unique(p)*100`%. I could include some covariate to influence detection, but I'm inclined to leave it as is. Let me know if you have strong feelings on this.
+
+### One year olds
+
+```{r}
 # Create a matrix and plug in all of the 60% detection probabilities
 P_1 <- matrix(rep(p, sum(marked_one)), 
               ncol = n_years - 1, 
@@ -164,23 +169,23 @@ P_A <- matrix(rep(p, sum(marked_adult)),
 
 There are three covariates that have an effect on rabbit survival.
 
-* The first is rabbit age. This was specified above, but acts as a contrast treatment. One year olds have the lowest, two-year olds have "medium" survival, and adults have the highest.
+* The first is rabbit age. This was specified earlier in the code (above), but acts as a contrast treatment. One year olds have the lowest, two-year olds have "medium" survival, and adults have the highest.
 
 * The second is mongoose presence, where mongoose presence lowers survival by 3.5%. This acts as another contrast treatment.
 
 * The final is distance from human building. This is a conceptually challenging covariate and can be easily misinterpreted by students. Human distance is a proxy variable (i.e., a variable which captures another variable). Here, human distance is meant to be a proxy for cat and dog proximity - both of which are a legitimate threat to the rabbits in real life. So part of the confusion comes from this being a proxy variable. The other part which causes confusion is that humans are getting closer each year - so a decreasing trend in human distance over time. However, the relationship with rabbit survival is positive. Keep in mind, however, that this means that the larger the value for human distance, the larger survival is. You want humans far away (because of their pets), but they are moving closer each year.
 
-When we run this practical, make sure to go over this detail with the students and make sure they understand it. Last year, it caused a few of them to get confused. I choose to keep it in this year, because it requires genuine thought to make sense of it.
+> When we run this practical, make sure to go over distance from human building in detail with the students and make sure they understand it. Last year, it caused a few of them to get confused. I choose to keep it in this year, because it requires genuine thought to make sense of it.
 
-Mongoose presence is determine as $logit(p_i) = 4 - 0.38 \times Year_i$, so probability of mongoose presence declines over the years. This reflects the control of mongoose in the site.
+Mongoose presence is determine as $logit(p_i) = 4 - 0.38 \times Year_i$, so the probability of mongoose presence declines over the years. This reflects the control of mongoose in the site.
 
-Human distance is a declining trend as well, based on the negative cumulative sum of the previous year and a trend (see the code).
+Human distance is a declining trend as well, meaning humans get closer over time, and is generated through the negative cumulative sum of distances from all previous years, with a trend of 0.5 km (which gets inverted in the cumulative sum) and a trend (see the code).
 
 Survival is generated according to:
 
 $\phi_i \sim binomial(p_i)$
 
-$p_i = \beta_0 + \beta_12YearOld_i + \beta_2Adult_i + \beta_3Mongoose_i + \beta_4Human_i$
+$logit(p_i) = \beta_0 + \beta_12YearOld_i + \beta_2Adult_i + \beta_3Mongoose_i + \beta_4Human_i$
 
 where $\phi_i$ is whether a rabbit survives or not ($\phi$ = phi), $p_i$ is the probability that the rabbit survives, $\beta_0$ is the global intercept, which defaults to one year old survival here, $\beta_1$ is the change in survival for two year olds, $2YearOld_i$ is a dummy variable indicating if rabbit $i$ is a two year old (1) or not (0), $\beta_2$ is the change in survival for adults, $Adult_i$ is a dummy variable for rabbit $i$ being an adult, $\beta_3$ is the effect of mongoose on rabbit $i$, $Mongoose_i$ is dummy variable indicating whether rabbit $i$ was exposed to mongoose, $\beta_4$ is the effect of human distance (and hence pets), and $Human_i$ is the distance humans were from the site.
 
@@ -366,7 +371,7 @@ for(i in 1:nrow(CH_A)){
 
 ## Age
 
-This is age when the rabbit was first captured, to be used in the `.INP` file as a group.
+This is age when the rabbit was first captured, to be used mostly to help orientate the students.
 
 ```{r}
 set.seed(666)
@@ -462,6 +467,8 @@ human_df
 
 ## Capture histories
 
+As will be used to create the `.INP` file for `MARK`.
+
 ```{r}
 CH_df <- as.data.frame(CH)
 
@@ -478,7 +485,7 @@ CH_df
 # write.csv(CH_df, "open_CMR_capture_history.csv", row.names = FALSE)
 ```
 
-# Figures
+# Summary of the data
 
 ## Survival over time
 
@@ -523,16 +530,16 @@ plotly::ggplotly(ggplot(df) +
 
 ## Summary table of survival
 
-A table summarising the range of true survivals over time. Variation is caused exclusively by age, mongoose presence, and human distance. These are not estimates, they are the actual values.
+A table summarising the range of true survivals by age and mongoose presence (as percentages). Variation in survival is caused exclusively by age, mongoose presence, and human distance. These are not estimates, they are the actual values.
 
-```{r}
-df$mongoose <- ifelse(df$mongoose == 1, "Mongoose Present", "Mongoose Absent")
+```{r, warning = FALSE, message = FALSE}
+df$mongoose <- ifelse(df$mongoose == 1, "Present", "Absent")
 
 df %>% 
   group_by(age, mongoose) %>% 
-  summarise(mean_survival = mean(survival),
-            min_survival = min(survival),
-            max_survival = max(survival))
+  summarise(mean = round(mean(survival), digit = 3) * 100,
+            minimum = round(min(survival), digit = 3) * 100,
+            maximum = round(max(survival), digit = 3) * 100)
 ```
 
 ## All variables
@@ -645,3 +652,161 @@ plotly::ggplotly(ggplot(df_min) +
 )
 ```
 
+# Conditional predictions
+
+One of the main uses of the open CMR models, for the students' management plans, is to feed these into matrix models (as I've done in the figure above). However, if they use the survival probabilities fit from the model alone, then the most they can hope for is a stable population growth.
+
+The reason for this is that survival is hindered by both mongoose and human distance (see the figure above with human distance on the x-axis). Note that the furthest distance humans are from the site, and when mongoose are absent is 8 km, while the furthest distance that humans are when mongoose are present is 10 km. While their model wouldn't estimate it, when humans are > 8 km away and and mongoose are _absence_, the survival probabilities of the rabbits leads to the population growing, but to determine this, the students have to be able to use the parameter estimates to reconstruct their equation and use this equation to predict survival probabilities.
+
+Last year, only the most engaged students tried this. So by all means suggest to the students that there may be a way to predict survival probabilities when there is no, or little, influence of both mongoose and humans, but to so subtly. If they are interested in trying to do this, they will need your help to understand. I will have covered some of this in the lecture, but they will have no practical knowledge of it, so won't truly understand.
+
+To predict a particular situation, such as humans 10 km and no mongoose, they should begin by writing the equation used in the model.
+
+For clarity, if the model were written using the `R` formula argument, it would be `phi ~ age + mongoose + human distance`, however this can be misleading as factors/categorical variables (such as age) are actually broken into their constituent levels. The full equation would be:
+
+$\phi_i \sim binomial(p_i)$
+
+$logit(p_i) = \beta_0 + \beta_12YearOld_i + \beta_2Adult_i + \beta_3Mongoose_i + \beta_4Human_i$
+
+Having run the model, the students should have estimates for the various $\beta$s. Here I will use arbitrary values for the parameters, just to demonstrate how the process works.
+
+Assume: 
+
+* $\beta_0 = 0.4$ (one year old survival)
+
+* $\beta_1 = 0.4$ (difference between one year old and two year old survival)
+
+* $\beta_2 = 1.0$ (difference between one year old and adult survival)
+
+* $\beta_3 = -0.5$ (effect of mongoose)
+
+* $\beta_4 = 0.02$ (effect of human distance)
+
+It's important that the students understand, if they are going to try and do predictions, that `age` is a contrast treatment (i.e., difference between groups) as well as understanding the logit link. They are taught about the logit link, so may have some rough intuition, but contrast treatments might need some more reinforcement.
+
+The logit link is an internal transformation of probabilities (most often from a binomial distribution, {0,1}) so that a linear relationship can be fit to the data. Trying to fit the data as 1 or 0 (survived or died) is rarely, if ever, possible, and fitting to probabilities can lead to estimates above 100% or below 0%. The logit link resolves this issue and allows straight line fits (i.e., $y = mx + c$).
+
+## Predicting for each age
+
+### One year old survival
+
+For example, assume one year old survival was 60%. The value 60%, or 0.6, is on the _response_ scale, but the model is fit on the link scale. The link scale here is the logit function, which is:
+
+$logit(\phi) = ln(\frac{\phi}{1-\phi})$
+
+which if our value of p is 0.6 becomes:
+
+$logit(0.6) = ln(\frac{0.6}{1-0.6}) = 0.4$
+
+This means that the $\beta_0 = 0.4$, is actually a 60% survival probability on the response scale. The parameters are returned, by the model, on the link scale (both in `R` and in `MARK`. For more intuition, see the following figure which shows how probabilities (on the y-axis) are related to their logit values (on the x-axis).
+
+```{r}
+p <- seq(from = 0.01, to = 0.99, by = 0.01) # I avoid 0 and 1 as these are -Inf and Inf, which won't plot
+logit <- function(p){
+  return(log(p/(1-p)))
+}
+l <- logit(p)
+
+ggplot() +
+  geom_line(aes(x = l, y = p)) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = "logit(p)",
+       y = "p") +
+  theme_bw() +
+  theme_minimal()
+```
+
+### Two year old survival
+
+To calculate two year old survival, the solution is not to simply do a backtransformation of $\beta_1 = 0.4$ (as we did for one year olds), because 0.4 is the _difference_ between two year old survival and one year old survival. That means that if the value is positive, then two year old survival is greater than one year old, while if the value were negative, then one years have a higher survival _compared_ to two year olds. The way you calculate two year survival is then:
+
+$logit(\phi_i) = \beta_0 + \beta_1 \times TwoYearOld_i$
+
+Note that $TwoYearOld_i$ is a "dummy" variable, which just means that for any given individual, if they were a two year old, they are assigned a `1` or a `0` if they are not. This happens automatically for users in `R`, which is nice, but in my experience this automation leads to lots of confusion.
+
+So if we want to predict the mean survival of a two year old rabbit:
+
+$logit(\phi_i) = \beta_0 + \beta_1 \times TwoYearOld_i = 0.4 + 0.4 \times 1 = 0.8$
+
+To backtransform this logit value to a probability we use the inverse logit function, which is:
+
+$\phi_i = \frac{e^p}{(1 + e^p)}$
+
+where $e$ is the exponential, and $p$ is the logit value (I think technically I should have kept using $\phi$ on the right side, instead of $p$, but I wanted to make it clear that it's the logit value).
+
+There is a function to do this in `R` called `plogis()`:
+
+```{r}
+plogis(0.8)
+```
+
+So two year old survival is 69%.
+
+### Adult survival
+
+For adults, we do the same process.
+
+$logit(\phi_i) = \beta_0 + \beta_1 \times TwoYearOld_i + \beta_2 \times Adult_i = 0.4 + 0.4 \times 0 + 1.0 \times 1 = 1.4$
+
+Which when we backtransform becomes:
+
+```{r}
+plogis(1.4)
+```
+
+So adults have an 80% chance to survive.
+
+But note that these predictions of survival are in a vacuum, where neither mongoose nor humans have any effect on survival.
+
+## Predicting for mongoose
+
+Mongoose presence works pretty much the same way as age, except that with mongoose there are only two levels; Present and Absent. Again, this is converted to a dummy variable, so present would be `1` and absent would be `0`. Because absent is `0`, our intercept (one year old survival) and survival of each age that we estimate above, becomes the survival _in the absence of mongoose_. To figure out how much mongoose does effect survival we would do:
+
+$logit(\phi_i) = \beta_0 + \beta_1 \times TwoYearOld_i + \beta_2 \times Adult_i + \beta_3 \times Mongoose_i$
+
+Let's assume we want to predict the survival of an adult in the presence of mongoose. Keep in mind that the effect of mongoose is negative. To predict this,  we'd do:
+
+$logit(\phi_i) = \beta_0 + \beta_1 \times TwoYearOld_i + \beta_2 \times Adult_i + \beta_3 \times Mongoose_i = 0.4 + 0.4 \times 0 + 1.0 \times 1 -0.5 \times 1 = 0.9$
+
+Which when we plug this into the `plogis` function (or do it by hand if you prefer), you get:
+
+```{r}
+plogis(0.9)
+```
+Which means that adults, in the presence of mongoose, have a survival probability of 71% - a decrease of 9%.
+
+## Predicting for human distance
+
+Human distance is probably the easiest parameter to work with. Because human distance is a continuous variables it means we do not need to use any dummy variables. We simply use the raw numbers. Assume we want to predict survival for two year olds, in the presence of mongoose, with humans 10.32 km away:
+
+$logit(\phi_i) = \beta_0 + \beta_1 \times TwoYearOld_i + \beta_2 \times Adult_i + \beta_3 \times Mongoose_i + \beta_4 \times Human_i = 0.4 + 0.4 \times 1 + 1.0 \times 0 -0.5 \times 1 + 0.02 \times 10.32 = 0.5$
+
+Again, plugging this into `plogis` we get:
+
+```{r}
+plogis(0.5)
+```
+
+A 62% chance to survive for two year olds, when there is a mongoose present and humans are 10.32 km away. If humans were right next to the rabbit $Human = 0$, then you'd have a 57% chance of survival.
+
+## Student predictions
+
+For students trying to figure out what the maximum survival probabilities would be if everything was "perfect" (i.e., no mongoose and humans 10 km away), they would do:
+
+### One year olds
+
+$logit(\phi_1) = \beta_0 + \beta_1 \times TwoYearOld + \beta_2 \times Adult + \beta_3 \times Mongoose + \beta_4 \times Human = 0.4 + 0.4 \times 0 + 1.0 \times 0 -0.5 \times 0 + 0.02 \times 10 = 0.6$
+
+Which, __with the arbitrary parameters used here__ would be 65%.
+
+### Two year olds
+
+$logit(\phi_2) = \beta_0 + \beta_1 \times TwoYearOld + \beta_2 \times Adult + \beta_3 \times Mongoose + \beta_4 \times Human = 0.4 + 0.4 \times 1 + 1.0 \times 0 -0.5 \times 0 + 0.02 \times 10 = 1$
+
+Which, __with the arbitrary parameters used here__ would be 73%.
+
+### Adults
+
+$logit(\phi_2) = \beta_0 + \beta_1 \times TwoYearOld + \beta_2 \times Adult + \beta_3 \times Mongoose + \beta_4 \times Human = 0.4 + 0.4 \times 0 + 1.0 \times 1 -0.5 \times 0 + 0.02 \times 10 = 1.6$
+
+Which, __with the arbitrary parameters used here__ would be 83%.
