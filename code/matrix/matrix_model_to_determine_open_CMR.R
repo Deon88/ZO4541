@@ -23,7 +23,7 @@ rabbit <- as.matrix(data.frame(
 
 row.names(rabbit) <- colnames(rabbit)
 
-eigs(A = rabbit, what = "ss")
+eigs(A = rabbit)
 
 numbers_at_stage <- c(
   58,
@@ -118,3 +118,40 @@ business_as_usual <- project(A = rabbit, vector = numbers_at_stage, time = 25)
 plot(business_as_usual)
 
 
+
+
+
+
+# Test survival (what is a reasonable maximum)
+
+phi_1 <- 0.55
+phi_2 <- 0.70
+phi_a <- 0.90
+
+sigma <- 0.5
+
+m_2 <- 1.1
+m_a <- 1.1
+
+F_2 <- m_2 * phi_1 * sigma
+F_a <- m_a * phi_1 * sigma
+
+rabbit <- as.matrix(data.frame(
+  one = c(0, phi_1, 0),
+  two = c(F_2, 0, phi_2),
+  adults = c(F_a, 0, phi_a)
+))
+
+row.names(rabbit) <- colnames(rabbit) # Copy the column names to row names
+
+eigs(A = rabbit)
+
+numbers_at_stage <- c(
+  58,
+  33,
+  159
+)
+
+business_as_usual <- project(A = rabbit, vector = numbers_at_stage, time = 25)
+
+plot(business_as_usual)
