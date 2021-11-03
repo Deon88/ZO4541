@@ -396,6 +396,8 @@ colnames(age)[1:length(seq_names)] <- seq_names
 
 age <- age[, c(16, 1:15)]
 
+age
+
 # write.csv(age, "open_CMR_age_covariate_2022.csv", row.names = FALSE)
 ```
 
@@ -425,6 +427,8 @@ colnames(mongoose_df)[1:length(seq_names)] <- seq_names
 
 mongoose_df <- mongoose_df[, c(17, 1:16)]
 
+mongoose_df
+
 # write.csv(mongoose_df, "open_CMR_mongoose_covariate.csv", row.names = FALSE)
 ```
 
@@ -451,6 +455,8 @@ colnames(human_df)[1:length(seq_names)] <- seq_names
 
 human_df <- human_df[, c(17, 1:16)]
 
+human_df
+
 # write.csv(human_df, "open_CMR_human_distance_covariate.csv", row.names = FALSE)
 ```
 
@@ -467,6 +473,8 @@ colnames(CH_df)[1:length(seq_names)] <- seq_names
 
 CH_df <- CH_df[, c(17, 1:16)]
 
+CH_df
+
 # write.csv(CH_df, "open_CMR_capture_history.csv", row.names = FALSE)
 ```
 
@@ -474,7 +482,7 @@ CH_df <- CH_df[, c(17, 1:16)]
 
 ## Survival over time
 
-The ribbons here are the survival rates I was targetting based on the matrix models. The upper part of the ribbon results in a stable population, the bottom of the ribbon results in a slowly declining population (still extant after 25 years).
+The ribbons here are the survival rates I was targetting based on the matrix models. The upper part of the ribbon shows the survival probabilities which results in the population doubling in 25 years. The bottom of the ribbon shows the survival probabilities which results in the population crashing to 50 individuals after 25 years (from an initial 250). The horizontal lines show the initial survival probabilities for each age, before including the effects of the covariates (note that I had to reduce the initial survivals by 5% to get reasonable range of survival probabilities).
 
 ```{r, warning = FALSE, message=FALSE}
 df <- data.frame(
@@ -490,22 +498,26 @@ df <- data.frame(
 df$age <- factor(df$age, levels = c("One", "Two", "Adult"))
 
 df$mean_phi <- c(rep(mean_phi_1, 16), rep(mean_phi_2, 16), rep(mean_phi_adult, 16))
-df$low_phi <- c(rep(0.52, 16), rep(0.62, 16), rep(0.83, 16))
+
+df$upp_phi <- c(rep(0.55, 16), rep(0.70, 16), rep(0.90, 16)) # population doubles in 25 years, lambda = 1.03
+df$low_phi <- c(rep(0.48, 16), rep(0.63, 16), rep(0.81, 16)) # population drops to ~ 50 individuals in 25 years, lambda = 0.92
 
 plotly::ggplotly(ggplot(df) +
-  geom_point(aes(x = year, y = survival, colour = age),
-             size = 2) +
-  geom_path(aes(x = year, y = survival, colour = age)) +
-  geom_ribbon(aes(x = year, y = survival, ymax = mean_phi, ymin = low_phi, fill = age), alpha = 0.2) +
-  scale_y_continuous(labels = scales::percent) +
-  labs(x = "Year",
-       y = "Survival",
-       colour = "Age",
-       fill = "Age") +
-  scale_colour_brewer(palette = "Set2") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_bw() +
-  theme_minimal()
+                   geom_ribbon(aes(x = year, y = survival, ymax = upp_phi, ymin = low_phi, fill = age), alpha = 0.2) +
+                   geom_hline(aes(yintercept = mean_phi, linetype = age, colour = age)) +
+                   geom_point(aes(x = year, y = survival, colour = age),
+                              size = 2) +
+                   geom_path(aes(x = year, y = survival, colour = age)) +
+                   scale_y_continuous(labels = scales::percent) +
+                   labs(x = "Year",
+                        y = "Survival",
+                        colour = "Age",
+                        fill = "Age",
+                        linetype = "Age") +
+                   scale_colour_brewer(palette = "Set2") +
+                   scale_fill_brewer(palette = "Set2") +
+                   theme_bw() +
+                   theme_minimal()
 )
 ```
 
@@ -517,7 +529,7 @@ A table summarising the range of true survivals over time. Variation is caused e
 df$mongoose <- ifelse(df$mongoose == 1, "Mongoose Present", "Mongoose Absent")
 
 df %>% 
-  group_by(age) %>% 
+  group_by(age, mongoose) %>% 
   summarise(mean_survival = mean(survival),
             min_survival = min(survival),
             max_survival = max(survival))
@@ -529,27 +541,28 @@ Figure below shows impact of all three covariates (age, mongoose presence, and d
 
 ```{r, message = FALSE, warning=FALSE}
 plotly::ggplotly(ggplot(df) +
-  geom_point(aes(x = human, y = survival, colour = age),
-             size = 2) +
-  geom_smooth(aes(x = human, y = survival, colour = age),
-              method = "lm") +
-  geom_ribbon(aes(x = human, y = survival, ymax = mean_phi, ymin = low_phi, fill = age), alpha = 0.2) +
-  scale_y_continuous(labels = scales::percent) +
-  facet_grid( ~ mongoose) +
-  labs(x = "Distance to humans",
-       y = "Survival",
-       colour = "Age",
-       fill = "Age") +
-  scale_colour_brewer(palette = "Set2") +
-  scale_fill_brewer(palette = "Set2") +
-  theme_bw() +
-  theme_minimal()
+                   geom_ribbon(aes(x = human, y = survival, ymax = upp_phi, ymin = low_phi, fill = age), alpha = 0.2) +
+                   geom_hline(aes(yintercept = mean_phi, linetype = age, colour = age)) +
+                   geom_smooth(aes(x = human, y = survival, colour = age),
+                               method = "lm") +
+                   geom_point(aes(x = human, y = survival, colour = age),
+                              size = 2) +
+                   scale_y_continuous(labels = scales::percent) +
+                   facet_grid( ~ mongoose) +
+                   labs(x = "Distance to humans",
+                        y = "Survival",
+                        colour = "Age",
+                        fill = "Age") +
+                   scale_colour_brewer(palette = "Set2") +
+                   scale_fill_brewer(palette = "Set2") +
+                   theme_bw() +
+                   theme_minimal()
 )
 ```
 
 ## Population trends
 
-The figure below is generated using matrix models. I assume a sex ratio of 50%, 1.1 offspring produced per year, and use the survival rates from the above table.
+The figure below is generated using matrix models. I assume a sex ratio of 50%, 1.1 offspring produced per year, and use the minimum, mean, and maximum survival rates from the above table.
 
 The average survival shows that the population is declining because both mongoose and humans negatively effect survival, and either one is generally "active" (i.e., something is always lowering survival). When humans are still far away and mongoose are not having an effect (the maximum survival), the survival rates lead to a stable population.
 
@@ -626,7 +639,7 @@ plotly::ggplotly(ggplot(df_min) +
   labs(y = "Population size",
        x = "Years into future",
        colour = "Variation in survival") +
-  scale_colour_brewer(palette = "Set2") +
+  scale_colour_brewer(palette = "Dark2") +
   theme_bw() +
   theme_minimal()
 )
