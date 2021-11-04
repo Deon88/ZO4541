@@ -8,7 +8,7 @@ output:
     highlight: monochrome
     code_folding: hide
     toc: true
-    toc_depth: 3
+    toc_depth: 5
     toc_float:
       collapsed: false
       smooth_scroll: false
@@ -135,7 +135,15 @@ ggplot(rabbit_plot) +
 
 ## Human distance
 
-Human distance is calculated lazily, just using a function to generate declining trends. In reality I could have used a linear equation, but meh.
+Human distance is generated according to a log Normal distribution, with a declining trend ($\alpha_1$), but each site has it's own intercept and slope (somewhat analogous to a random effect).
+
+$\alpha_0 \sim logNormal(3.9, 0.3)$
+
+$\alpha_1 \sim Normal(-0.5, 2)$
+
+$Human_i \sim logNormal(\mu_i, 0.1)$
+
+$log(\mu_i) = \alpha_0 + \alpha_1 \times Year_i$
 
 ```{r}
 set.seed(666)
@@ -143,15 +151,17 @@ set.seed(666)
 # Array with [Year, Site, Region]
 human <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
 
+a0 <- rlnorm(1, mean = 3.3, sd = 0.5)
+a1 <- rnorm(1, mean = -5, sd = 2)
+
 for(s in 1:n_site){
   for(r in 1:n_region) {
-    mean_d <- runif(1, 8, 75)
-    human[, s, r] <- generate.trend(nyears = n_year, 
-                                    mu1 = mean_d, 
-                                    change = runif(1, max = ifelse(mean_d < 35, -1, -10), min = ifelse(mean_d < 35, -10, -35)))$mu
+    a0 <- rlnorm(1, mean = 3.9, sd = 0.3)
+    a1 <- rnorm(1, mean = -0.5, sd = 0.2)
+    human[, s, r] <- rlnorm(n_year, mean = log(a0 + a1 * 1:n_year), sd = 0.1)
   }
 }
-#}
+
 
 human_df <- as.data.frame(t(as.data.frame(human)))
 
@@ -501,13 +511,62 @@ ggplot(psi_plot) +
 
 ### Occupancy simulation
 
+Colonisation probability varies in each site ($i$) and in each year ($t$) according to snake (negative) and rabbit (positive) presence.
+
+$logit(\gamma_{i,t}) = \eta_0 + \eta_1 \times Snake_{i,t} + \eta_2 \times Rabbit_{i,t}$
+
+$\eta_0 = -1, \eta_1 = -1, \eta_2 = 2$
+
+Extinction probability:
+
+$logit(\epsilon_{i,t}) = \zeta_0 + \zeta_1 \times Buster_{i,t} + \zeta_2 \times Forest_{i,t} + \zeta_3 \times Human_{i,t}$
+
+$\zeta_0 = -2, \zeta_1 = 4.75, \zeta_2 = -0.03, \zeta_3 =-0.05$
+
+Occupancy:
+
+Generated from a binomial distribution with a conditional statement:
+
+Keep in mind that initial occupancy has already been resolved (see above), so $t$ here is from the second occasion onwards.
+
+$\Pi_{i,t} \sim Binomial(\theta_{i,t})$
+
+$$
+\begin{equation}
+    logit(\theta_{i,t}) =
+    \begin{cases}
+      \Pi_{i, t-1} = 1, & \gamma_{i,t} \\
+      \Pi_{i, t-1} = 0, & \epsilon_{i,t} 
+    \end{cases}
+  \end{equation}
+$$
+
+where:
+
+$\Pi$ is the occupancy state (i.e., occupied or vacant).
+
+$\theta$ is the probability for a site to be occupied.
+
+$\gamma$ and $\epsilon$ are as above (colonisation and extinction probabilities).
+
 ```{r}
+# gamma parameters
+eta0 = -1
+eta1 = -1
+eta2 = 2
+
+# extinction parameters
+zeta0 = -1.5  # larger values decrease extinction (intercept)
+zeta1 = 5     # larger values increase extinction (mongoose busters)
+zeta2 = -0.02 # larger values decrease extinction (smaller forests bad)
+zeta3 = -0.03 # larger values decrease extinction (closer humans bad)
+
 for(t in 2:n_year) {
   # Probability of colonization
-  colonise_p[t, , ] <- plogis(-1 + -1 * snake[t, , ] + 2 * rabbit[t, , ])
+  colonise_p[t, , ] <- plogis(eta0 + eta1 * snake[t, , ] + eta2 * rabbit[t, , ])
 
   # Probability of extinction
-  extinct_p[t, , ] <- plogis(-2 + 4.75 * buster[t, , ] - 0.03 * forest[t, , ] - 0.05 * human[t, , ])
+  extinct_p[t, , ] <- plogis(zeta0 + zeta1 * buster[t, , ] + zeta2 * forest[t, , ] + zeta3 * human[t, , ])
 
   # Probability to be present
   presence_p[t, , ] <- ifelse(occupancy[t - 1, , ] == 0, colonise_p[t, , ], 1 - extinct_p[t, , ])
