@@ -28,7 +28,103 @@ library(reshape2)
 library(emon)
 ```
 
-# Initial values
+# Occupancy models
+
+* Occupancy models are only concerned with whether or not a species presence or absence from a number of sites. There may be a single individual of the species present or millions of them. In occupancy models, we do not care how many there are, only if at least one individual of the species is present or not.
+
+* There are two very broad forms of occupancy models. The first is a multi-season occupancy model, which assumes closure during the sampling period, while the system can be open between primary periods (e.g., years). This is the form of the model the students will use to analyse the data contained herein.
+
+* The other form is a single season occupancy model, where data is collected during a single primary period (e.g., the field season of 2013). These models only estimate detection probability and occupancy probability. The students learn about this method, but will not use it.
+
+* Both forms of occupancy models use surveys in multiple locations (called "sites" in this document). As such, occupancy models can be considered "species distribution models" (SDMs), but note that SDMs are more generally just simple Poisson (number of animals) or Binomial (animal presence/absence) GLMs, where detection probabilities are not considered (or they simply assume that if the species was never found, it was because they were never there).
+
+* Both forms of occupancy models require multiple surveys per primary period (i.e., three surveys per field season, where single season occupancy models only have a single field season). Any detections of the species in one survey implies that it was always present, regardless if you detected it or not on the other two surveys.
+
+* As such, there is a strong assumption of closure at the site level during a sampling period, i.e., if the species is present at one survey, it was always present.
+
+* Instances where the species is detected in only some of the surveys, in a given site, helps to calibrate detection probabilities (e.g., if you find an animal in one survey out of three, then your detection probability is 33%).
+
+* For multi-season occupancy models (referred to simply as "occupancy models" hereafter), because the data consists of multiple primary periods, the model considers that the time between primary periods to be open, meaning that from one year to the next a site can go from occupied to unoccupied.
+
+* Occupancy models assume, and account for, _imperfect detection_.
+
+## Estimated parameters
+
+There are four core parameters estimated in multi-season occupancy models:
+
+### Initial occupancy probability
+
+* $\psi_1$ (psi) is the initial occupancy probability, i.e., what is the probability that the site was occupied in the __first primary period only__.
+
+### Colonisation probability
+
+* $\gamma$ (gamma) is the colonisation probability, and is conditional on the site having been unoccupied in the previous primary period (the species need to be absent from the site in the previous year in order for the site to be colonised in the subsequent year).
+
+### Extinction probability
+
+* $\epsilon$ (epsilon) is the extinction probability, and is conditional on the site having been occupied (the species needs to be present from the site in the previous year in order for the site to go locally extinct in the subsequent year).
+
+### Detection probability
+
+* $p$ is the detection probability, and is conditional on the being occupied (the animal needs to be present in the site in order for you to be able to detect it). This means that false negatives are positive (i.e., you can fail to detect the animal), but false positives are not positive (i.e., you cannot detect the animal if it is not present).
+
+All of these parameters can themselves be influenced by covariates. If they are modelled as such, these relationships take the form of Binomial GLMs (i.e., $logit(parameter_i) = \beta_0 + \beta_1X_i$). As such, an occupancy models may have multiple sub-models, each with their own parameters.
+
+## Derived parameters
+
+### Occupancy probability
+
+The following parameters are not directly estimated in the model, but are derived based on the parameters which are estimated. These parameters include:
+
+* $\psi_{i,t}$ is the probability that a site ($i$) was occupied in a given primary periods ($t$, e.g., year).
+
+* Within this code, $\Pi_{i,t}$ is simulated as:
+
+$\Pi_{i,t} = Binomial(\psi_{i,t})$
+
+$$
+\begin{equation}
+    \psi_{i,t} =
+    \begin{cases}
+      \Pi_{i, t-1} = 0, & \gamma_{i,t} \\
+      \Pi_{i, t-1} = 1, & (1 - \epsilon_{i,t}) 
+    \end{cases}
+  \end{equation}
+$$
+
+which can be read as; the probability that a site is occupied in a given year ($\psi_{i,t}$), depends on the true occupancy in the previous primary period ($\Pi_{i,t-1}$). When the species were previously absent ($\Pi_{i,t-1} = 0$), then it may be colonised ($\gamma_{i,t}$), while if the species were previously present ($\Pi_{i,t-1} = 1$), then it may fail to go extinct ($(1 - \epsilon_{i,t})$). Note that the { bracket is the equivalent to an if statement (e.g., if a site is occupied (1) then do this, or if a site is unoccupied (0) then do that).
+
+* While this is how the data is simulated, this is not useful for the model because the true presence is not know ($\Pi$). We only know that here because I simulate the data.
+
+* As such, this process is modelled as : $\psi_{i, t+1} = \psi_{i,t}(1 - \epsilon_{i,t}) + (1 - \psi_{i,t})\gamma_{i,t}$, which reads essentially the same as the above, except that it uses the probability of presence ($\psi_{i,t}$) rather than true occupancy ($\Pi_{i,t}$).
+
+# Details of the dataset
+
+* This dataset is interested in the dynamics on a non-native invasive species, the Java mongoose.
+
+* Mongoose were intentionally introduced to the island in ca. 1979 in order to deal with the Habu snake. The Habu snake occasionally bite people, and the venom can be lethal (though rarely).
+
+* The island relies on tourism, in part driven by tourists coming to see the endemic Amami rabbit. The rabbits split off from the mainland rabbit population millions of years ago.
+
+* Not long after introducing the mongoose, it became clear that they were a severe threat to the rabbits.
+
+* An organisation, called "Mongoose Busters" was started to tackle the mongoose.
+
+* This data is meant to provide the students with an understanding of the current situation with the Java mongoose, and to use the results herein to make any recommendations for their continued management.
+
+* Note, in the real world, I think the mongoose were eradicated from the island last year. These simulations are therefore an alternative reality.
+
+## Changes to simulation from last year
+
+* I have increased the sample size dramatically. Last year I tried to keep sample sizes fairly realistic, but this lead to issues where models could not be fit.
+
+* There is a trade-off between maintaining realism and teaching, but I think this year I favour teaching, so I increased sample sizes.
+
+* There is an additional variable this year - sniffer dogs - which I have stolen from a students report from last year (look adaptive management in action!!!).
+
+# Simulation
+
+## Initial values
 
 Some of the values are used throughout the simulation, and as such are specified here.
 
@@ -48,9 +144,9 @@ n_year <- length(survey_years)
 
 The sample design has `r n_region` regions, within each there are `r n_site` sites where mongoose surveys occur. The data is collected from `r min(survey_years)` to `r max(survey_years)`, but note that surveys may or may not occur every year. This is decided later in the document.
 
-## Occupancy arrays
+## Initial arrays
 
-This code creates empty arrays (arrays are 3-dimensional datasets, or, more accurately, stacked matrices) to later populate with values for true occupancy, colonisation probability, extinction probability and presence probability.
+The following code creates empty arrays (arrays are 3-dimensional datasets or "stacked" matrices) to later populate with values for the various occupancy dynamics and parameters.
 
 ```{r}
 # With dimensions [Year, Site, Region]
@@ -62,7 +158,7 @@ extinct_p <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
 presence_p <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
 ```
 
-# Covariates
+# Simulating covariates
 
 ## Amami rabbits
 
@@ -70,11 +166,13 @@ For each location ($i$), in each year ($t$), rabbit presence in the first year i
 
 $Rabbit_{i,1} = binomial(p_{i,1}), logit(p_{i,1}) = 1.1$
 
-Subsequent rabbit presence is mostly temporally autocorrelated, but if there were no rabbits in $t-1$, then there is a 15% chance for rabbits to appear:
+Subsequent rabbit presence depends on if there were rabbits present in the previous year, however if there were no rabbits in $t-1$, then there is a 15% chance for rabbits to appear:
 
 $Rabbit_{i,t} = binomial(p_{i,t})$
 
 $logit(p_{i,t}) = -1.74 + Rabbit_{i,t-1} \times 3$
+
+### Simulation
 
 ```{r}
 set.seed(666)
@@ -94,7 +192,11 @@ for(t in 2:n_year){
     }
   }
 }
+```
 
+### Data
+
+```{r}
 rabbit_df <- as.data.frame(t(as.data.frame(rabbit)))
 
 sites_id <- rep(letters[1:5], n_region)
@@ -109,7 +211,12 @@ seq_names <- paste(region_id, sites_id, sep = " ")
 rownames(rabbit_df)[1:length(seq_names)] <- seq_names
 
 rabbit_df$site <- factor(rownames(rabbit_df))
+rabbit_df
+```
 
+### Figure
+
+```{r}
 rabbit_plot <- melt(rabbit_df, id="site" )
 
 rabbit_plot$region <- str_split(rabbit_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -126,10 +233,11 @@ ggplot(rabbit_plot) +
        title = "Rabbit presence in each site over time") +
   facet_grid(region ~ location) +
   scale_x_continuous(breaks = c(1990, 2010)) +
-  scale_y_continuous(breaks = c(0, 1)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
@@ -144,6 +252,8 @@ $\alpha_1 \sim Normal(-0.5, 2)$
 $Human_i \sim logNormal(\mu_i, 0.1)$
 
 $log(\mu_i) = \alpha_0 + \alpha_1 \times Year_i$
+
+### Simulation
 
 ```{r}
 set.seed(666)
@@ -161,15 +271,23 @@ for(s in 1:n_site){
     human[, s, r] <- rlnorm(n_year, mean = log(a0 + a1 * 1:n_year), sd = 0.1)
   }
 }
+```
 
+### Data
 
+```{r}
 human_df <- as.data.frame(t(as.data.frame(human)))
 
 rownames(human_df)[1:length(seq_names)] <- seq_names
 colnames(human_df) <- colnames(rabbit_df[,-37])
 
 human_df$site<-factor(rownames(human_df))
+human_df
+```
 
+### Figure
+
+```{r}
 human_plot <- melt(human_df, id="site" )
 
 human_plot$region <- str_split(human_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -189,13 +307,17 @@ ggplot(human_plot) +
   facet_grid(region ~ location) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
 ## Mongoose control
 
 Mongoose control start date is random for each region, beginning from the fifth year up to six years before the end of the surveying period. Within a given region, individual sites may start on the regional start year, or up to six years later
+
+### Simulation
 
 ```{r}
 set.seed(666)
@@ -210,14 +332,23 @@ for(i in 1:n_region){
     buster[site_start:n_year, s, i] <- 1
   }
 }
+```
 
+### Data
+
+```{r}
 buster_df <- as.data.frame(t(as.data.frame(buster)))
 
 rownames(buster_df)[1:length(seq_names)] <- seq_names
 colnames(buster_df) <- colnames(human_df[,-37])
 
 buster_df$site <- factor(rownames(buster_df))
+buster_df
+```
 
+### Figure
+
+```{r}
 buster_plot <- melt(buster_df, id="site" )
 
 buster_plot$region <- str_split(buster_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -238,7 +369,9 @@ ggplot(buster_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
@@ -254,6 +387,8 @@ $Snake_{i,t} = binomial(p_{i,t})$
 
 $logit(p_{i,t}) = -2.9 + Snake_{i,t-1} \times 3.6$
 
+### Simulation
+
 ```{r}
 set.seed(666)
 # Array with [Year, Site, Region]
@@ -268,14 +403,23 @@ for(t in 2:n_year){
     }
   }
 }
+```
 
+### Data
+
+```{r}
 snake_df <- as.data.frame(t(as.data.frame(snake)))
 
 rownames(snake_df)[1:length(seq_names)] <- seq_names
 colnames(snake_df) <- colnames(human_df[,-37])
 
 snake_df$site <- factor(rownames(snake_df))
+snake_df
+```
 
+### Figure
+
+```{r}
 snake_plot <- melt(snake_df, id="site" )
 
 snake_plot$region <- str_split(snake_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -295,7 +439,9 @@ ggplot(snake_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
@@ -304,6 +450,8 @@ ggplot(snake_plot) +
 Forest area is constant throughout the years, but varies within sites ($i$) across regions:
 
 $Area_i = Uniform(2, 100)$
+
+### Simulation
 
 ```{r}
 set.seed(666)
@@ -315,14 +463,23 @@ for(s in 1:n_site){
     forest[, s, r] <- round(runif(1, 2, 100), digits = 1)
   }
 }
+```
 
+### Data
+
+```{r}
 forest_df <- as.data.frame(t(as.data.frame(forest)))
 
 rownames(forest_df)[1:length(seq_names)] <- seq_names
 colnames(forest_df) <- colnames(human_df[,-37])
 
 forest_df$site <- factor(rownames(forest_df))
+forest_df
+```
 
+### Figure
+
+```{r}
 forest_plot <- melt(forest_df, id="site" )
 
 forest_plot$region <- str_split(forest_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -345,9 +502,9 @@ ggplot(forest_plot) +
   scale_fill_brewer(palette = "Dark2") +
   theme_bw() +
   theme_minimal() +
-  theme(#strip.text.x = element_blank(),
-        strip.text.y = element_blank(),
-        axis.text.x = element_text(angle = 90))
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.y = element_text(angle = 360))
 ```
 
 ## Precipitation
@@ -364,6 +521,8 @@ $log(\mu_{i,t}) = 5 + Rain_{i,t-1} \times 0.35$
 
 However, if rain ever went over 3500, then it would be reset using $Rain_{i,1} = logNormal(\mu_{i,1},0.5), log(mu_{i,1}) = 5$.
 
+### Simulation
+
 ```{r}
 set.seed(666)
 # Array with [Year, Site, Region]
@@ -379,14 +538,23 @@ for(t in 2:n_year){
     }
   }
 }
+```
 
+### Data
+
+```{r}
 rain_df <- as.data.frame(t(as.data.frame(rain)))
 
 rownames(rain_df)[1:length(seq_names)] <- seq_names
 colnames(rain_df) <- colnames(human_df[,-37])
 
 rain_df$site <- factor(rownames(rain_df))
+rain_df
+```
 
+### Figure
+
+```{r}
 rain_plot <- melt(rain_df, id="site" )
 
 rain_plot$region <- str_split(rain_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -406,7 +574,9 @@ ggplot(rain_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
@@ -417,6 +587,8 @@ Sniffer dog useage increases over time and is generated from a binomial distribu
 $Dog_{i,t} = binomial(p_{i,t})$
 
 $logit(p_{i,t}) = -4 + Years_{i,t-1} \times 0.2$
+
+### Simulation
 
 ```{r}
 set.seed(666)
@@ -432,14 +604,23 @@ for(t in 2:n_year){
     }
   }
 }
+```
 
+### Data
+
+```{r}
 dog_df <- as.data.frame(t(as.data.frame(dog)))
 
 rownames(dog_df)[1:length(seq_names)] <- seq_names
 colnames(dog_df) <- colnames(human_df[,-37])
 
 dog_df$site <- factor(rownames(dog_df))
+dog_df
+```
 
+### Figure
+
+```{r}
 dog_plot <- melt(dog_df, id="site" )
 
 dog_plot$region <- str_split(dog_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -459,7 +640,9 @@ ggplot(dog_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
@@ -469,47 +652,24 @@ ggplot(dog_plot) +
 
 Initial occupancy is a constant 75% chance.
 
+$\psi_1 = Binomial(\Xi)$
+
+$logit(\Xi) = \rho$
+
+$\rho = 1.1$
+
 ```{r, warning = FALSE, message=FALSE}
 set.seed(666)
 
-# rain[1, , ] is the first year for all site and all regions.
-psi <- plogis(1.1)
-# psi varies from ca. 0.1 to 0.99
+xi = 1.1
 
+psi <- plogis(xi)
 
 # Use probability and draw from binomial distribution to determine presence/absence
 occupancy[1, , ] <- rbinom(length(occupancy[1, , ]), size = 1, prob = psi)
-
-psi_plot <- as.data.frame(t(as.data.frame(occupancy[1, , ])))
-
-psi_plot <- melt(psi_plot)
-
-psi_plot$variable <- seq_names
-
-psi_plot$region <- str_split(psi_plot$variable, pattern = " ", simplify = TRUE)[,1]
-psi_plot$location <- str_split(psi_plot$variable, pattern = " ", simplify = TRUE)[,2]
-
-
-ggplot(psi_plot) +
-  geom_bar(aes(x = value, fill = factor(value)),
-            show.legend = FALSE, alpha = 0.6, colour = "black") +
-  labs(x = "Present or absent",
-       y = "",
-       title = "Initial occupancy",
-       fill = "Region") +
-  scale_x_continuous(breaks = c(0, 1)) +
-  scale_fill_brewer(palette = "Dark2") +
-  facet_grid(region ~ location) +
-  theme_bw() +
-  #theme_minimal() +
-  theme(strip.text.x = element_blank(),
-        strip.text.y = element_text(angle = 360),
-        axis.text.y = element_blank())
 ```
 
-## Full simulation
-
-### Occupancy simulation
+## Dynamic occupancy
 
 Colonisation probability varies in each site ($i$) and in each year ($t$) according to snake (negative) and rabbit (positive) presence.
 
@@ -549,6 +709,7 @@ $\theta$ is the probability for a site to be occupied.
 
 $\gamma$ and $\epsilon$ are as above (colonisation and extinction probabilities).
 
+
 ```{r}
 # gamma parameters
 eta0 = -1
@@ -569,6 +730,9 @@ for(t in 2:n_year) {
   extinct_p[t, , ] <- plogis(zeta0 + zeta1 * buster[t, , ] + zeta2 * forest[t, , ] + zeta3 * human[t, , ])
 
   # Probability to be present
+  # The ifelse can be read as:
+    # If the site is unoccupied, what is the prob is was colonised?
+    # If the sire was occupied, what is the prob that it *failed* to go extinct?
   presence_p[t, , ] <- ifelse(occupancy[t - 1, , ] == 0, colonise_p[t, , ], 1 - extinct_p[t, , ])
 
   # Actual presence in subsequent years
@@ -576,41 +740,131 @@ for(t in 2:n_year) {
 }
 ```
 
-#### Presence
+## Detection
+
+### Survey times
+
+Below I determine in which years did surveying take place. This could be every year, or every 5 years. Whichever we deem most appropriate. Given that the simulation is currently over a very long period of time, I have surveys occur every two years, though this may change. Check the code to make sure I haven't changed the code, but not updated this text (see the: `survey_times <- seq(1, n_year, by = XXX`, where `XXX` is how often the surveys occur).
+
+I also decide here how many surveys occur each year.
 
 ```{r}
-occupancy_df <- as.data.frame(t(as.data.frame(occupancy)))
-
-rownames(occupancy_df)[1:length(seq_names)] <- seq_names
-colnames(occupancy_df) <- colnames(human_df[,-37])
-
-occupancy_df$site <- factor(rownames(occupancy_df))
-
-occupancy_plot <- melt(occupancy_df, id="site" )
-
-occupancy_plot$region <- str_split(occupancy_plot$site, pattern = " ", simplify = TRUE)[,1]
-occupancy_plot$location <- str_split(occupancy_plot$site, pattern = " ", simplify = TRUE)[,2]
-
-occupancy_plot$year <- as.numeric(as.character(occupancy_plot$variable))
-
-a <- ggplot(occupancy_plot) +
-  geom_area(aes(x = year, y = value, fill = region, group = location),
-            show.legend = FALSE, alpha = 0.6, colour = "black") +
-  labs(x = "Year",
-       y = "Mongoose present",
-       fill = "Region",
-       title = "Mongoose presence in each site over time") +
-  facet_grid(region ~ location) +
-  scale_y_continuous(breaks = c(0, 1)) +
-  scale_x_continuous(breaks = c(1990, 2010)) +
-  theme_bw() +
-  theme_minimal() +
-  theme(strip.text.x = element_blank(),
-        strip.text.y = element_text(angle = 360))
-a
+survey_times <- seq(1, n_year, by = 2)
+n_survey <- 3
 ```
 
-#### Colonisation probability
+### Detection probability
+
+Detection probability is increased by the presence of sniffer dogs. The relationship is:
+
+$logit(p_{i,t, s}) = \delta_0 + \delta_1 \times Dog_{i,t,s}$
+
+where:
+
+$p$ is the probability to detect mongoose in site $i$, in year $t$, and in survey $s$
+
+$\delta_0 = 0.85$
+
+$\delta_1 = 1.5$
+
+```{r}
+set.seed(666)
+
+detect_p <- array(0, dim = c(nrow = length(survey_times), ncol = n_site, n_region))
+rownames(detect_p) <- 1986 + survey_times
+
+# Parameters
+delta_0 = 0.85
+delta_1 = 1.5
+
+# Detection probability is 0 + 0.01 * rainfall
+
+for(j in 1:n_region){
+  for (i in 1:length(survey_times)) {
+    detect_p[i, , j] <- plogis(delta_0 + delta_1 * dog[i, , j])
+  }
+}
+```
+
+### Detections
+
+Using the probability of detection, this is used to determine if mongoose were actually detected or not in each survey. Note that the detection probability is multiplied by the occupancy state (meaning that if there were no mongoose, you cannot detect them - no false positives).
+
+$Y_{i,t,s} \sim Binomial(\Pi_{i,t,s} \times p_{i,t,s})$
+
+where:
+
+$Y$ is detection of mongoose {0,1} (and forms the encounter histories),
+
+and $\Pi$ is as above (mongoose present or absent, {0,1}).
+
+```{r}
+# Extract the true occupancies for survey times (redundant unless surveys do not occur every year)
+occupancy_survey <- occupancy[survey_times, , ]
+
+# Array with [Sampling year, Site, Region]
+detections <- array(0, dim = c(nrow = length(survey_times) * n_survey, ncol = n_site, n_region))
+
+# Year as row name
+rownames(detections) <- rep(1986 + survey_times, each = 3)
+
+for(j in 1:n_region) {
+  for (i in 1:n_site) {
+    detections[, i, j] <- rbinom(n = length(survey_times) * n_survey,
+                                 size = 1, 
+                                 prob = rep(detect_p[, i, j], each = n_survey) * rep(occupancy_survey[, i, j], each = n_survey))
+  }
+}
+```
+
+# Encounter histories
+
+Note that the years are replicated for each survey (so `1897` is the first survey and `1987.1` is the second survey).
+
+```{r}
+detections_df <- as.data.frame(t(as.data.frame(detections)))
+
+rownames(detections_df)[1:length(seq_names)] <- seq_names
+
+detections_df$site <- factor(rownames(detections_df))
+colnames(detections_df) <- gsub("X", "", colnames(detections_df))
+
+detections_df
+```
+
+# Figures
+
+## Initial occupancy (outcome)
+
+```{r}
+psi_plot <- as.data.frame(t(as.data.frame(occupancy[1, , ])))
+
+psi_plot <- melt(psi_plot)
+
+psi_plot$variable <- seq_names
+
+psi_plot$region <- str_split(psi_plot$variable, pattern = " ", simplify = TRUE)[,1]
+psi_plot$location <- str_split(psi_plot$variable, pattern = " ", simplify = TRUE)[,2]
+
+
+ggplot(psi_plot) +
+  geom_bar(aes(x = value, fill = factor(value)),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Present or absent",
+       y = "",
+       title = "Initial occupancy",
+       fill = "Region") +
+  scale_x_continuous(breaks = c(0, 1)) +
+  scale_fill_brewer(palette = "Dark2") +
+  facet_grid(region ~ location) +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Colonisation (probability)
 
 ```{r}
 colonise_df <- as.data.frame(t(as.data.frame(colonise_p)))
@@ -639,11 +893,13 @@ ggplot(colonise_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
-#### Extinction probability
+## Extinction (probability)
 
 ```{r}
 extinct_df <- as.data.frame(t(as.data.frame(extinct_p)))
@@ -672,11 +928,13 @@ ggplot(extinct_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
-#### Probability of presence
+## Presence (probability)
 
 ```{r}
 presence_df <- as.data.frame(t(as.data.frame(presence_p)))
@@ -705,37 +963,50 @@ ggplot(presence_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
-### Detection simulation
-
-#### Detection probability
+## Presence (outcome)
 
 ```{r}
-# Detection simulation ----------------------------------------------------
+occupancy_df <- as.data.frame(t(as.data.frame(occupancy)))
 
-# When surveys occured out of all years
-# Survey occurs every year
-survey_times <- seq(1, n_year, by = 2)
+rownames(occupancy_df)[1:length(seq_names)] <- seq_names
+colnames(occupancy_df) <- colnames(human_df[,-37])
 
-# Simulating detection ----------------------------------------------------
+occupancy_df$site <- factor(rownames(occupancy_df))
 
-detect_p <- array(0, dim = c(nrow = length(survey_times), ncol = n_site, n_region))
+occupancy_plot <- melt(occupancy_df, id="site" )
 
-# Year as row name
-rownames(detect_p) <- 1986 + survey_times
+occupancy_plot$region <- str_split(occupancy_plot$site, pattern = " ", simplify = TRUE)[,1]
+occupancy_plot$location <- str_split(occupancy_plot$site, pattern = " ", simplify = TRUE)[,2]
 
+occupancy_plot$year <- as.numeric(as.character(occupancy_plot$variable))
 
-# Detection probability is 0 + 0.01 * rainfall
+ggplot(occupancy_plot) +
+  geom_area(aes(x = year, y = value, fill = region, group = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Year",
+       y = "Mongoose present",
+       fill = "Region",
+       title = "Mongoose presence in each site over time") +
+  facet_grid(region ~ location) +
+  scale_y_continuous(breaks = c(0, 1)) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
 
-for(j in 1:n_region){
-  for (i in 1:length(survey_times)) {
-    detect_p[i, , j] <- plogis(0.85 + 1.5 * dog[i, , j])
-  }
-}
+## Detection (probability)
 
+```{r}
 detect_p_df <- as.data.frame(t(as.data.frame(detect_p)))
 
 rownames(detect_p_df)[1:length(seq_names)] <- seq_names
@@ -765,42 +1036,15 @@ ggplot(detect_p_plot) +
   scale_x_continuous(breaks = c(1990, 2010)) +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
 ```
 
-#### Detections
-
+## Detection (outcome)
 
 ```{r}
-set.seed(666)
-
-# Extract the true occupancies for survey times (only required when surveys do not occur every year)
-occupancy_survey <- occupancy[survey_times, , ]
-
-# Number of surveys per site in each region in each year
-n_rep <- 3
-
-# Array with [Sampling year, Site, Region]
-detections <- array(0, dim = c(nrow = length(survey_times) * n_rep, ncol = n_site, n_region))
-
-# Year as row name
-rownames(detections) <- rep(1986 + survey_times, each = 3)
-
-for(j in 1:n_region) {
-  for (i in 1:n_site) {
-    detections[, i, j] <- rbinom(n = length(survey_times) * n_rep,
-                                 size = 1, 
-                                 prob = rep(detect_p[, i, j], each = n_rep) * rep(occupancy_survey[, i, j], each = n_rep))
-  }
-}
-
-detections_df <- as.data.frame(t(as.data.frame(detections)))
-
-rownames(detections_df)[1:length(seq_names)] <- seq_names
-
-detections_df$site <- factor(rownames(detections_df))
-
 detections_plot <- melt(detections_df, id="site" )
 
 detections_plot$variable <- gsub("X", "", detections_plot$variable)
@@ -815,7 +1059,7 @@ detections_plot$survey <- rep(c(rep(1, times = n_site * n_region),
                                 rep(3, times = n_site * n_region)), 
                               times = length(survey_times))
 
-b <- ggplot(detections_plot) +
+ggplot(detections_plot) +
   geom_area(aes(x = year, y = value, fill = factor(survey)),
             show.legend = FALSE, alpha = 0.8) +
   labs(x = "Year",
@@ -829,15 +1073,8 @@ b <- ggplot(detections_plot) +
   scale_color_viridis_c(option = "C") +
   theme_bw() +
   theme_minimal() +
-  theme(strip.text.x = element_blank(),
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
         strip.text.y = element_text(angle = 360))
-b
 ```
-
-# Presence versus detections
-
-```{r}
-a
-b
-```
-
