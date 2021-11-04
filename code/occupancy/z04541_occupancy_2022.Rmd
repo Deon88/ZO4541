@@ -217,6 +217,7 @@ rabbit_df
 ### Figure
 
 ```{r}
+library(RColorBrewer)
 rabbit_plot <- melt(rabbit_df, id="site" )
 
 rabbit_plot$region <- str_split(rabbit_plot$site, pattern = " ", simplify = TRUE)[,1]
@@ -1061,7 +1062,7 @@ detections_plot$survey <- rep(c(rep(1, times = n_site * n_region),
 
 ggplot(detections_plot) +
   geom_area(aes(x = year, y = value, fill = factor(survey)),
-            show.legend = FALSE, alpha = 0.8) +
+            show.legend = FALSE, alpha = 0.8, colour = "black") +
   labs(x = "Year",
        y = "Mongoose detected",
        fill = "Survey",
@@ -1070,7 +1071,8 @@ ggplot(detections_plot) +
   facet_grid(region ~ location) +
   scale_y_continuous(breaks = c(0, 1)) +
   scale_x_continuous(breaks = c(1990, 2010)) +
-  scale_color_viridis_c(option = "C") +
+  #scale_fill_brewer(palette = "Set1") +
+  scale_fill_viridis_d(option = "C") +
   theme_bw() +
   theme_minimal() +
   theme(axis.text.y = element_blank(),
