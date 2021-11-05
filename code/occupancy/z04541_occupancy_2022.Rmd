@@ -217,7 +217,6 @@ rabbit_df
 ### Figure
 
 ```{r}
-library(RColorBrewer)
 rabbit_plot <- melt(rabbit_df, id="site" )
 
 rabbit_plot$region <- str_split(rabbit_plot$site, pattern = " ", simplify = TRUE)[,1]
