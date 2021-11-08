@@ -1,0 +1,582 @@
+---
+title: "Practical 3 Occupancy model student handout"
+author: "Deon Roos"
+date: "Script last run on `r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    highlight: monochrome
+    code_folding: hide
+    toc: true
+    toc_depth: 5
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r, message = FALSE, warning=FALSE}
+library(tidyverse)
+library(patchwork)
+library(reshape2)
+library(emon)
+```
+
+```{r}
+# Number of regions (increased from last year's 7)
+n_region <- 15
+
+# Number of sites in each region
+n_site <- 5
+
+# Years when surveying took place
+survey_years <- seq(1987, 2022, by = 1)
+
+# Total number of years
+n_year <- length(survey_years)
+```
+
+# Reminder of occupancy models
+
+Some text.
+
+```{r}
+# With dimensions [Year, Site, Region]
+occupancy <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+rownames(occupancy) <- c(survey_years)
+
+colonise_p <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+extinct_p <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+presence_p <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+```
+
+
+# Details of data collection
+
+Some text.
+
+# Available covariates
+
+Some text.
+
+## Amami rabbit presence
+
+```{r}
+set.seed(666)
+# Array with [Year, Site, Region]
+rabbit <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+# Year as row name
+rownames(rabbit) <- c(survey_years) # 20 years
+
+# Initial probability that a site has rabbits present = 75%
+rabbit[1, , ] <- rbinom(n = n_site * n_region, size = 1, prob = plogis(1.1))
+
+
+for(t in 2:n_year){
+  for(i in 1:n_region){
+    for(s in 1:n_site) {
+      rabbit[t, s, i] <- rbinom(1, 1, prob = plogis(-1.74 + rabbit[t-1, s, i] * 3))
+    }
+  }
+}
+```
+
+```{r}
+rabbit_df <- as.data.frame(t(as.data.frame(rabbit)))
+
+sites_id <- rep(letters[1:5], n_region)
+
+# The names of the 15 regions
+region_id <- c(rep("Edateku", n_site), rep("Oshima", n_site), rep("Kakeromajima", n_site), rep("Ukejima", n_site), rep("Yoroshima", n_site),
+               rep("Tatsugo", n_site), rep("Kikai", n_site), rep("Setouchi", n_site), rep("Uken", n_site), rep("Yamato", n_site),
+               rep("Katetsu", n_site), rep("Kinsakubaru", n_site), rep("Naze", n_site), rep("Gunto", n_site), rep("Tokunoshima", n_site))
+
+seq_names <- paste(region_id, sites_id, sep = " ")
+
+rownames(rabbit_df)[1:length(seq_names)] <- seq_names
+
+rabbit_df$site <- factor(rownames(rabbit_df))
+```
+
+```{r}
+rabbit_plot <- melt(rabbit_df, id="site" )
+
+rabbit_plot$region <- str_split(rabbit_plot$site, pattern = " ", simplify = TRUE)[,1]
+rabbit_plot$location <- str_split(rabbit_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+rabbit_plot$year <- as.numeric(as.character(rabbit_plot$variable))
+
+ggplot(rabbit_plot) +
+  geom_area(aes(x = year, y = value, fill = region, group = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Year",
+       y = "Rabbits presence",
+       fill = "Region",
+       title = "Rabbit presence in each site over time") +
+  facet_grid(region ~ location) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Human distance
+
+```{r}
+set.seed(666)
+
+# Array with [Year, Site, Region]
+human <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+
+a0 <- rlnorm(1, mean = 3.3, sd = 0.5)
+a1 <- rnorm(1, mean = -5, sd = 2)
+
+for(s in 1:n_site){
+  for(r in 1:n_region) {
+    a0 <- rlnorm(1, mean = 3.9, sd = 0.3)
+    a1 <- rnorm(1, mean = -0.5, sd = 0.2)
+    human[, s, r] <- rlnorm(n_year, mean = log(a0 + a1 * 1:n_year), sd = 0.1)
+  }
+}
+```
+
+```{r}
+human_df <- as.data.frame(t(as.data.frame(human)))
+
+rownames(human_df)[1:length(seq_names)] <- seq_names
+colnames(human_df) <- colnames(rabbit_df[,-37])
+
+human_df$site<-factor(rownames(human_df))
+```
+
+```{r}
+human_plot <- melt(human_df, id="site" )
+
+human_plot$region <- str_split(human_plot$site, pattern = " ", simplify = TRUE)[,1]
+human_plot$location <- str_split(human_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+human_plot$year <- as.numeric(as.character(human_plot$variable))
+
+ggplot(human_plot) +
+  geom_area(aes(x = year, y = value, fill = region),
+            show.legend = FALSE, colour = "black") +
+  labs(x = "Year",
+       y = "Distance to sampling site (km)",
+       colour = "Region",
+       title = "Distance to nearest house in each site over time") +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  scale_y_continuous(n.breaks = 3) +
+  facet_grid(region ~ location) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Mongoose control
+
+```{r}
+set.seed(666)
+# Array with [Year, Site, Region]
+buster <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+
+region_start <- round(runif(n_region, 5, n_year - 6), digit = 0)
+
+for(i in 1:n_region){
+  for(s in 1:n_site) {
+    site_start <- region_start[i] + round(runif(1, 0, 6), digit = 0)
+    buster[site_start:n_year, s, i] <- 1
+  }
+}
+```
+
+```{r}
+buster_df <- as.data.frame(t(as.data.frame(buster)))
+
+rownames(buster_df)[1:length(seq_names)] <- seq_names
+colnames(buster_df) <- colnames(human_df[,-37])
+
+buster_df$site <- factor(rownames(buster_df))
+```
+
+```{r}
+buster_plot <- melt(buster_df, id="site" )
+
+buster_plot$region <- str_split(buster_plot$site, pattern = " ", simplify = TRUE)[,1]
+buster_plot$location <- str_split(buster_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+buster_plot$year <- as.numeric(as.character(buster_plot$variable))
+
+ggplot(buster_plot) +
+  geom_area(aes(x = year, y = value, fill = region, group = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Year",
+       y = "Mongoose control implemented",
+       fill = "Region",
+       colour = "Region",
+       title = "Mongoose control in each site over time") +
+  facet_grid(region ~ location) +
+  scale_y_continuous(breaks = c(0, 1)) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Habu snake
+
+```{r}
+set.seed(666)
+# Array with [Year, Site, Region]
+snake <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+
+snake[1, , ] <- rbinom(n = n_site * n_region, size = 1, prob = plogis(-1.74))
+
+for(t in 2:n_year){
+  for(i in 1:n_region){
+    for(s in 1:n_site) {
+      snake[t, s, i] <- rbinom(1, 1, prob = plogis(-2.9 + snake[t-1, s, i] * 3.6))
+    }
+  }
+}
+```
+
+```{r}
+snake_df <- as.data.frame(t(as.data.frame(snake)))
+
+rownames(snake_df)[1:length(seq_names)] <- seq_names
+colnames(snake_df) <- colnames(human_df[,-37])
+
+snake_df$site <- factor(rownames(snake_df))
+```
+
+```{r}
+snake_plot <- melt(snake_df, id="site" )
+
+snake_plot$region <- str_split(snake_plot$site, pattern = " ", simplify = TRUE)[,1]
+snake_plot$location <- str_split(snake_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+snake_plot$year <- as.numeric(as.character(snake_plot$variable))
+
+ggplot(snake_plot) +
+  geom_area(aes(x = year, y = value, fill = region, group = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Year",
+       y = "Habu snake presence",
+       fill = "Region",
+       title = "Habu snake presence in each site over time") +
+  facet_grid(region ~ location) +
+  scale_y_continuous(breaks = c(0, 1)) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Forest area
+
+```{r}
+set.seed(666)
+# Array with [Year, Site, Region]
+forest <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+
+for(s in 1:n_site){
+  for(r in 1:n_region){
+    forest[, s, r] <- round(runif(1, 2, 100), digits = 1)
+  }
+}
+```
+
+```{r}
+forest_df <- as.data.frame(t(as.data.frame(forest)))
+
+rownames(forest_df)[1:length(seq_names)] <- seq_names
+colnames(forest_df) <- colnames(human_df[,-37])
+
+forest_df$site <- factor(rownames(forest_df))
+```
+
+```{r}
+forest_plot <- melt(forest_df, id="site" )
+
+forest_plot$region <- str_split(forest_plot$site, pattern = " ", simplify = TRUE)[,1]
+forest_plot$location <- str_split(forest_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+forest_plot$year <- as.numeric(as.character(forest_plot$variable))
+
+forest_plot <- forest_plot %>% 
+  group_by(region, location) %>% 
+  summarise(forest_area = mean(value))
+
+ggplot(forest_plot) +
+  geom_col(aes(x = location, y = forest_area, fill = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Site",
+       y = "Forest area (ha)",
+       fill = "Region",
+       title = "Forest area per region (ha)") +
+  facet_wrap(~ region) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Precipitation
+
+```{r}
+set.seed(666)
+# Array with [Year, Site, Region]
+rain <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+
+rain[1, , ] <- rlnorm(n = n_site * n_region, mean = 5, sd = 0.5)
+
+for(t in 2:n_year){
+  for(i in 1:n_region){
+    for(s in 1:n_site) {
+      rain[t, s, i] <- rlnorm(n = 1, mean = 5 + rain[t-1, s, i] * 0.35, sd = 0.5)
+      rain[t, s, i] <- ifelse(rain[t, s, i] > 3500, rlnorm(n = 1, mean = 5, sd = 0.5), rain[t, s, i])
+    }
+  }
+}
+```
+
+```{r}
+rain_df <- as.data.frame(t(as.data.frame(rain)))
+
+rownames(rain_df)[1:length(seq_names)] <- seq_names
+colnames(rain_df) <- colnames(human_df[,-37])
+
+rain_df$site <- factor(rownames(rain_df))
+```
+
+```{r}
+rain_plot <- melt(rain_df, id="site" )
+
+rain_plot$region <- str_split(rain_plot$site, pattern = " ", simplify = TRUE)[,1]
+rain_plot$location <- str_split(rain_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+rain_plot$year <- as.numeric(as.character(rain_plot$variable))
+
+ggplot(rain_plot) +
+  geom_area(aes(x = year, y = value, fill = region, group = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Year",
+       y = "Precipitation (mm)",
+       fill = "Region",
+       title = "Precipitation in each site over time") +
+  facet_grid(region ~ location) +
+  scale_y_continuous(n.breaks = 3) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+## Sniffer dogs
+
+```{r}
+set.seed(666)
+# Array with [Year, Site, Region]
+dog <- array(0, dim = c(nrow = n_year, ncol = n_site, n_region))
+
+dog[1, , ] <- rbinom(n = n_site * n_region, size = 1, prob = 0.01)
+
+for(t in 2:n_year){
+  for(i in 1:n_region){
+    for(s in 1:n_site) {
+      dog[t, s, i] <- rbinom(1, 1, prob = plogis(-4 + t * 0.2))
+    }
+  }
+}
+```
+
+```{r}
+dog_df <- as.data.frame(t(as.data.frame(dog)))
+
+rownames(dog_df)[1:length(seq_names)] <- seq_names
+colnames(dog_df) <- colnames(human_df[,-37])
+
+dog_df$site <- factor(rownames(dog_df))
+```
+
+```{r}
+dog_plot <- melt(dog_df, id="site" )
+
+dog_plot$region <- str_split(dog_plot$site, pattern = " ", simplify = TRUE)[,1]
+dog_plot$location <- str_split(dog_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+dog_plot$year <- as.numeric(as.character(dog_plot$variable))
+
+ggplot(dog_plot) +
+  geom_area(aes(x = year, y = value, fill = region, group = location),
+            show.legend = FALSE, alpha = 0.6, colour = "black") +
+  labs(x = "Year",
+       y = "Sniffer dogs used",
+       fill = "Region",
+       title = "Sniffer dog useage in each site over time") +
+  facet_grid(region ~ location) +
+  scale_y_continuous(breaks = c(0, 1)) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
+
+# Detections
+
+Detections over time in each survey.
+
+```{r, warning = FALSE, message=FALSE}
+set.seed(666)
+
+xi = 1.1
+
+psi <- plogis(xi)
+
+# Use probability and draw from binomial distribution to determine presence/absence
+occupancy[1, , ] <- rbinom(length(occupancy[1, , ]), size = 1, prob = psi)
+```
+
+```{r}
+# gamma parameters
+eta0 = -1
+eta1 = -1
+eta2 = 2
+
+# extinction parameters
+zeta0 = -1.5  # larger values decrease extinction (intercept)
+zeta1 = 5     # larger values increase extinction (mongoose busters)
+zeta2 = -0.02 # larger values decrease extinction (smaller forests bad)
+zeta3 = -0.03 # larger values decrease extinction (closer humans bad)
+
+for(t in 2:n_year) {
+  # Probability of colonization
+  colonise_p[t, , ] <- plogis(eta0 + eta1 * snake[t, , ] + eta2 * rabbit[t, , ])
+
+  # Probability of extinction
+  extinct_p[t, , ] <- plogis(zeta0 + zeta1 * buster[t, , ] + zeta2 * forest[t, , ] + zeta3 * human[t, , ])
+
+  # Probability to be present
+  # The ifelse can be read as:
+    # If the site is unoccupied, what is the prob is was colonised?
+    # If the sire was occupied, what is the prob that it *failed* to go extinct?
+  presence_p[t, , ] <- ifelse(occupancy[t - 1, , ] == 0, colonise_p[t, , ], 1 - extinct_p[t, , ])
+
+  # Actual presence in subsequent years
+  occupancy[t, , ] <- rbinom(length(presence_p[t, , ]), size = 1, prob = presence_p[t, , ])
+}
+```
+
+```{r}
+survey_times <- seq(1, n_year, by = 2)
+n_survey <- 3
+```
+
+```{r}
+set.seed(666)
+
+detect_p <- array(0, dim = c(nrow = length(survey_times), ncol = n_site, n_region))
+rownames(detect_p) <- 1986 + survey_times
+
+# Parameters
+delta_0 = 0.85
+delta_1 = 1.5
+
+# Detection probability is 0 + 0.01 * rainfall
+
+for(j in 1:n_region){
+  for (i in 1:length(survey_times)) {
+    detect_p[i, , j] <- plogis(delta_0 + delta_1 * dog[i, , j])
+  }
+}
+```
+
+```{r}
+# Extract the true occupancies for survey times (redundant unless surveys do not occur every year)
+occupancy_survey <- occupancy[survey_times, , ]
+
+# Array with [Sampling year, Site, Region]
+detections <- array(0, dim = c(nrow = length(survey_times) * n_survey, ncol = n_site, n_region))
+
+# Year as row name
+rownames(detections) <- rep(1986 + survey_times, each = 3)
+
+for(j in 1:n_region) {
+  for (i in 1:n_site) {
+    detections[, i, j] <- rbinom(n = length(survey_times) * n_survey,
+                                 size = 1, 
+                                 prob = rep(detect_p[, i, j], each = n_survey) * rep(occupancy_survey[, i, j], each = n_survey))
+  }
+}
+```
+
+```{r}
+detections_df <- as.data.frame(t(as.data.frame(detections)))
+
+rownames(detections_df)[1:length(seq_names)] <- seq_names
+
+detections_df$site <- factor(rownames(detections_df))
+colnames(detections_df) <- gsub("X", "", colnames(detections_df))
+```
+
+```{r}
+detections_plot <- melt(detections_df, id="site" )
+
+detections_plot$variable <- gsub("X", "", detections_plot$variable)
+
+detections_plot$region <- str_split(detections_plot$site, pattern = " ", simplify = TRUE)[,1]
+detections_plot$location <- str_split(detections_plot$site, pattern = " ", simplify = TRUE)[,2]
+
+detections_plot$year <- round(as.numeric(as.character(detections_plot$variable)), digit = 0)
+
+detections_plot$survey <- rep(c(rep(1, times = n_site * n_region), 
+                                rep(2, times = n_site * n_region), 
+                                rep(3, times = n_site * n_region)), 
+                              times = length(survey_times))
+
+ggplot(detections_plot) +
+  geom_area(aes(x = year, y = value, fill = factor(survey)),
+            show.legend = FALSE, alpha = 0.8, colour = "black") +
+  labs(x = "Year",
+       y = "Mongoose detected",
+       fill = "Survey",
+       title = "Mongoose detected in each survey over time",
+       colour = "Year") +
+  facet_grid(region ~ location) +
+  scale_y_continuous(breaks = c(0, 1)) +
+  scale_x_continuous(breaks = c(1990, 2010)) +
+  #scale_fill_brewer(palette = "Set1") +
+  scale_fill_viridis_d(option = "C") +
+  theme_bw() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_text(angle = 360))
+```
