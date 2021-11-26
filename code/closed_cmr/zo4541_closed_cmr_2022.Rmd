@@ -594,3 +594,56 @@ ggplot(cap2022_adult) +
   theme_bw() +
   theme_minimal()
 ```
+
+```{r}
+cap1965 <- cap1965[,c(3, 1, 2)]
+cap1965$end <- ";"
+cap1965$CH <- gsub(" ", "", cap1965$CH, fixed = TRUE)
+
+write.table(cap1965, 
+            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_1965.txt", 
+            row.name = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+
+cap1983 <- cap1983[,c(3, 1, 2)]
+cap1983$end <- ";"
+cap1983$CH <- gsub(" ", "", cap1983$CH, fixed = TRUE)
+
+write.table(cap1983, 
+            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_1983.txt", 
+            row.name = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+
+cap2022_juv <- cap2022_juv[,c(3, 1, 2)]
+cap2022_juv$end <- ";"
+cap2022_juv$CH <- gsub(" ", "", cap2022_juv$CH, fixed = TRUE)
+
+write.table(cap2022_juv, 
+            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_juv.txt", 
+            row.name = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+
+cap2022_suba <- cap2022_suba[,c(3, 1, 2)]
+cap2022_suba$end <- ";"
+cap2022_suba$CH <- gsub(" ", "", cap2022_suba$CH, fixed = TRUE)
+
+write.table(cap2022_suba, 
+            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_suba.txt", 
+            row.name = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+
+cap2022_adult <- cap2022_adult[,c(3, 1, 2)]
+cap2022_adult$end <- ";"
+cap2022_adult$CH <- gsub(" ", "", cap2022_adult$CH, fixed = TRUE)
+
+write.table(cap2022_adult, 
+            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_adult.txt", 
+            row.name = FALSE, 
+            col.names = FALSE, 
+            quote = FALSE)
+```
+
