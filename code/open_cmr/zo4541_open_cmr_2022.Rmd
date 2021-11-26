@@ -486,7 +486,17 @@ CH_df
 # Export data
 
 ```{r}
-# capture histories
+# capture histories w age at first capture group
+age_df <- as.data.frame(rbind(x_1, x_2, x_a))
+
+tmp <- as.data.frame(t(age_df)) %>%
+  summarise_all(~ min(na.omit(.))) %>% 
+  t(.)
+
+grp <- noquote(paste(ifelse(tmp[,1] == 1, "1 0 0",
+                            ifelse(tmp[,1] == 2, "0 1 0", "0 0 1"))))
+
+
 CH <- noquote(paste("/* Capture history for", 
                     CH_df$ID, 
                     "*/", 
@@ -506,6 +516,8 @@ CH <- noquote(paste("/* Capture history for",
                                   CH_df$`2020`,
                                   CH_df$`2021`,
                                   CH_df$`2022`,
+                                  " ",
+                                  grp,
                                   ";",
                                   sep = "")
                     ))
@@ -518,6 +530,12 @@ write.csv(CH_df,
 write.csv(CH, 
           "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\INP_amami_rabbit_open_CMR_2022.csv", 
           row.names = FALSE)
+
+# INP format
+write.table(CH, 
+            "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\amami_rabbit_open_CMR_2022.INP", 
+            row.names = FALSE, quote = FALSE)
+
 
 # Age
 write.csv(age, 
