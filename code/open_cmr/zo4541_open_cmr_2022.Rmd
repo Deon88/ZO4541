@@ -402,8 +402,6 @@ colnames(age)[1:length(seq_names)] <- seq_names
 age <- age[, c(16, 1:15)]
 
 age
-
-# write.csv(age, "open_CMR_age_covariate_2022.csv", row.names = FALSE)
 ```
 
 
@@ -484,6 +482,60 @@ CH_df
 
 # write.csv(CH_df, "open_CMR_capture_history.csv", row.names = FALSE)
 ```
+
+# Export data
+
+```{r}
+# capture histories
+CH <- noquote(paste("/* Capture history for", 
+                    CH_df$ID, 
+                    "*/", 
+                    noquote(paste(CH_df$`2007`,
+                                  CH_df$`2008`,
+                                  CH_df$`2009`,
+                                  CH_df$`2010`,
+                                  CH_df$`2011`,
+                                  CH_df$`2012`,
+                                  CH_df$`2013`,
+                                  CH_df$`2014`,
+                                  CH_df$`2015`,
+                                  CH_df$`2016`,
+                                  CH_df$`2017`,
+                                  CH_df$`2018`,
+                                  CH_df$`2019`,
+                                  CH_df$`2020`,
+                                  CH_df$`2021`,
+                                  CH_df$`2022`,
+                                  ";",
+                                  sep = "")
+                    ))
+)
+
+write.csv(CH_df, 
+          "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\CH_amami_rabbit_open_CMR_2022.csv", 
+          row.names = FALSE)
+
+write.csv(CH, 
+          "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\INP_amami_rabbit_open_CMR_2022.csv", 
+          row.names = FALSE)
+
+# Age
+write.csv(age, 
+          "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\age_amami_rabbit_open_CMR_2022.csv", 
+          row.names = FALSE)
+
+# House with pet distance
+write.csv(human_df, 
+          "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\house_amami_rabbit_open_CMR_2022.csv", 
+          row.names = FALSE)
+
+# mongoose presence
+write.csv(mongoose_df, 
+          "C:\\github\\ZO4541\\data\\management_plan\\open_cmr\\individual_files\\mongoose_amami_rabbit_open_CMR_2022.csv", 
+          row.names = FALSE)
+
+```
+
 
 # Summary of the data
 

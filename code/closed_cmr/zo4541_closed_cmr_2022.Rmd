@@ -140,71 +140,99 @@ ggplot(df) +
   theme_minimal()
 ```
 
+# Function to generate CH
+
+```{r}
+ch <- function(N = NULL, t = 3, p = NULL, pr = NULL){
+  # set seed so that randomness is consisitent
+  set.seed(666)
+  
+  cap <- matrix(nrow = N, ncol = t, data = NA)
+  
+  # Captures on day 1
+  cap[,1] <- rbinom(N, 1, p[1])
+
+  # Captures and recaptures on day 2  
+  for(i in 1:nrow(cap)){
+    cap[i,2] <- ifelse(cap[i,1] == 0, rbinom(N, 1, p[2]), rbinom(N, 1, pr[1]))
+  }
+  
+  # Captures and recaptures on day 3
+  for(i in 1:nrow(cap)){
+    cap[i,3] <- ifelse(cap[i,1] == 0 & cap[i,2] == 0, rbinom(N, 1, p[3]), rbinom(N, 1, pr[2]))
+  }
+  
+  # Convert to df
+  cap <- data.frame(
+    CH = paste(cap[,1], cap[,2], cap[,3])
+  )
+  
+  # count each ch
+  cap <- cap %>% 
+    count(CH, sort = T)
+  
+  # Remove rabbits never caught (this is what students are trying to estimate)
+  cap <- cap[cap$CH != "0 0 0",]
+  
+  # Add comment for INP file to explain each row
+  cap$comment <- NA
+  
+  for(i in 1:nrow(cap)){
+    if(cap$CH[i] == "1 1 1"){
+      cap$comment[i] <- "/* Number of rabbits caught on day 1, 2, 3 */"
+    } else if(cap$CH[i] == "1 1 0") {
+      cap$comment[i] <- "/* Number of rabbits caught on day 1, 2 */"
+    } else if(cap$CH[i] == "0 1 1") {
+      cap$comment[i] <- "/* Number of rabbits caught on day 2, 3 */"
+    } else if(cap$CH[i] == "1 0 1") {
+      cap$comment[i] <- "/* Number of rabbits caught on day 1, 3 */"
+    } else if(cap$CH[i] == "1 0 0") {
+      cap$comment[i] <- "/* Number of rabbits caught on day 1 */"
+    } else if(cap$CH[i] == "0 1 0") {
+      cap$comment[i] <- "/* Number of rabbits caught on day 2 */"
+    } else if(cap$CH[i] == "0 0 1") {
+      cap$comment[i] <- "/* Number of rabbits caught on day 3 */"
+    }
+  }
+  
+  # rearrange df suitable for inp
+  cap <- cap[,c(3, 1, 2)]
+  
+  return(cap)
+}
+
+inp <- function(df){
+  df$n <- paste(df$n, ";", sep = "")
+  df$CH <- gsub(" ", "", df$CH, fixed = TRUE)
+  return(df)
+}
+```
+
 
 ## 1965
 
 There are 674 rabbits in 1965. Note that there were no rabbits on the island, so this can act as a "control" or reference abundance the students may want to use as a conservation objective. Don't outright tell them this, but nudge them in this direction.
 
-Capture probabilities vary over time (model $M_t$): 17% on day 1; 34% on day 2; and 48% on day 3.
+Capture probabilities vary over time (model $M_t$): 
+
+$p_1 = 0.17$
+
+$p_2 = 0.34$
+
+$p_3 = 0.48$
+
+$N = 674$
+
+$f_0 = 190$
 
 ```{r}
-# Set seed so that the random numbers are the same each time you run the script
-set.seed(666)
+N = 674
+p = c(0.17, 0.34, 0.48)
+pr = c(0.34, 0.48)
 
-# total number of rabbits
-N <- 674
+cap1965 <- ch(N = N, p = p, pr = pr)
 
-# number of days of trapping
-t <- 3
-
-# capture probabilities (must be same length as number of days)
-p <- c(0.17, 0.34, 0.48)
-
-# create empty matrix
-cap <- matrix(nrow = N, ncol = t, data = NA)
-
-# see how many rabbits are actually captured on each day
-# Based on binomial distribution with probability p[day], do this for all rabbits (N) where there is only a single day to capture (1)
-cap[,1] <- rbinom(N, 1, p[1])
-cap[,2] <- rbinom(N, 1, p[2])
-cap[,3] <- rbinom(N, 1, p[3])
-
-# Combine and store it in a dataframe
-cap1965 <- data.frame(
-  CH = paste(cap[,1], cap[,2], cap[,3])
-)
-
-# Turn it into a frequency table
-cap1965 <- cap1965 %>% 
-  count(CH, sort = T)
-
-# Remove rabbits never caught (this is what students are trying to estimate)
-cap1965 <- cap1965[cap1965$CH != "0 0 0",]
-
-# Adding comments for students
-
-cap1965$comment <- NA
-
-for(i in 1:nrow(cap1965)){
-  if(cap1965$CH[i] == "1 1 1"){
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 1, 2, 3 */"
-  } else if(cap1965$CH[i] == "1 1 0") {
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 1, 2 */"
-  } else if(cap1965$CH[i] == "0 1 1") {
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 2, 3 */"
-  } else if(cap1965$CH[i] == "1 0 1") {
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 1, 3 */"
-  } else if(cap1965$CH[i] == "1 0 0") {
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 1 */"
-  } else if(cap1965$CH[i] == "0 1 0") {
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 2 */"
-  } else if(cap1965$CH[i] == "0 0 1") {
-    cap1965$comment[i] <- "/* Number of rabbits caught on day 3 */"
-  }
-}
-
-# Final data looks like:
-cap1965[,c(3, 1, 2)]
+cap1965
 ```
 
 ```{r}
@@ -222,84 +250,34 @@ ggplot(cap1965) +
   theme_minimal()
 ```
 
+Convert to form ready for `MARK`:
+
+```{r}
+cap1965 <- inp(cap1965)
+```
+
 ## 1983
 
 There are 421 rabbits in 1983. Note that the mongoose were introduced in the late 1970s, so the reduction here is meant to reflect the mongoose impact after a handful of years.
 
-Capture probabilities vary over time (model $M_t$) but there is also a behavioural effect (model $M_b$) where previously captured rabbits are more likely to be recaptured. Capture probabilities are 7% on day 1; 24% on day 2; and 38% on day 3, with recapture probabilities of 64% on day 2, and 87% on day 3.
+Capture probabilities vary with behavior (model $M_b$) where previously captured rabbits are more likely to be recaptured. Capture probabilities are 43%, and recapture probabilities are 74%.
 
+$p = 0.43$
+
+$c = 0.74$
+
+$N = 421$
+
+$f_0 = 70$
 
 ```{r}
-# Set seed so that the random numbers are the same each time you run the script
-set.seed(666)
+N = 421
+p = c(0.43, 0.43, 0.43)
+pr = c(0.74, 0.74)
 
-# total number of rabbits
-N <- 421
+cap1983 <- ch(N = N, p = p, pr = pr)
 
-# number of days of trapping
-t <- 3
-
-# capture probabilities (must be same length as number of days)
-p <- c(0.07, 0.24, 0.38)
-
-# recapture probability (must be of length t - 1)
-pr <- c(0.64, 0.87)
-
-# create empty matrix
-cap <- matrix(nrow = N, ncol = t, data = NA)
-
-# see how many rabbits are actually captured on each day
-# Based on binomial distribution with probability p[day], do this for all rabbits (N) where there is only a single day to capture (1)
-cap[,1] <- rbinom(N, 1, p[1])
-
-# For day 2, use a for loop to go through each individual (i)
-# If rabbit [i] had not been caught on day 1 (cap[i,1] == 0)
-  # Then it uses the capture prob for day 2 p[2]
-  # But if it was caught, then use recapture prob for day 2 (pr[1])
-for(i in 1:nrow(cap)){
-  cap[i,2] <- ifelse(cap[i,1] == 0, rbinom(N, 1, p[2]), rbinom(N, 1, pr[1]))
-}
-# Repeat above loop but for last day
-for(i in 1:nrow(cap)){
-  cap[i,3] <- ifelse(cap[i,1] == 0 & cap[i,2] == 0, rbinom(N, 1, p[3]), rbinom(N, 1, pr[2]))
-}
-
-# Combine and store it in a dataframe
-cap1983 <- data.frame(
-  CH = paste(cap[,1], cap[,2], cap[,3])
-)
-
-# Turn it into a frequency table
-cap1983 <- cap1983 %>% 
-  count(CH, sort = T)
-
-# Remove rabbits never caught (this is what students are trying to estimate)
-cap1983 <- cap1983[cap1983$CH != "0 0 0",]
-
-# Adding comments for students
-
-cap1983$comment <- NA
-
-for(i in 1:nrow(cap1983)){
-  if(cap1983$CH[i] == "1 1 1"){
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 1, 2, 3 */"
-  } else if(cap1983$CH[i] == "1 1 0") {
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 1, 2 */"
-  } else if(cap1983$CH[i] == "0 1 1") {
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 2, 3 */"
-  } else if(cap1983$CH[i] == "1 0 1") {
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 1, 3 */"
-  } else if(cap1983$CH[i] == "1 0 0") {
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 1 */"
-  } else if(cap1983$CH[i] == "0 1 0") {
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 2 */"
-  } else if(cap1983$CH[i] == "0 0 1") {
-    cap1983$comment[i] <- "/* Number of rabbits caught on day 3 */"
-  }
-}
-
-# Final data looks like:
-cap1983[,c(3, 1, 2)]
+cap1983
 ```
 
 ```{r}
@@ -317,83 +295,39 @@ ggplot(cap1983) +
   theme_minimal()
 ```
 
+Convert to form ready for `MARK`:
+
+```{r}
+cap1983 <- inp(cap1983)
+```
+
 ## 2022 
 
 ### One year olds
 
 There are 83 one year old rabbits in 2022.
 
-Capture probabilities are constant at 36% but there is a recapture effect. Recapture rates vary over time from 42% on day 2 to 54% on day 3.
+Capture probabilities are constant at 49% but there is a recapture effect. Recapture rates vary over time from 32% on day 2 to 54% on day 3.
+
+
+$p = 0.39$
+
+$c_1 = 0.42$
+
+$c_2 = 0.64$
+
+$N = 83$
+
+$f_0 = 22$
 
 ```{r}
-# Set seed so that the random numbers are the same each time you run the script
-set.seed(666)
+N = 83
+p = c(0.39, 0.39, 0.39)
+pr = c(0.42, 0.64)
 
-# total number of rabbits
-N <- 83
+cap2022_juv <- ch(N = N, p = p, pr = pr)
 
-# number of days of trapping
-t <- 3
-
-# capture probabilities (must be same length as number of days)
-p <- c(0.36, 0.36, 0.36)
-
-# recapture probability (must be of length t - 1)
-pr <- c(0.42, 0.54)
-
-# create empty matrix
-cap <- matrix(nrow = N, ncol = t, data = NA)
-
-# see how many rabbits are actually captured on each day
-# Based on binomial distribution with probability p[day], do this for all rabbits (N) where there is only a single day to capture (1)
-cap[,1] <- rbinom(N, 1, p[1])
-# For day 2, use a for loop to go through each individual (i)
-# If rabbit [i] had not been caught on day 1 (cap[i,1] == 0)
-  # Then it uses the capture prob for day 2 p[2]
-  # But if it was caught, then use recapture prob for day 2 (pr[1])
-for(i in 1:nrow(cap)){
-  cap[i,2] <- ifelse(cap[i,1] == 0, rbinom(N, 1, p[2]), rbinom(N, 1, pr[1]))
-}
-for(i in 1:nrow(cap)){
-  cap[i,3] <- ifelse(cap[i,1] == 0 & cap[i,2] == 0, rbinom(N, 1, p[3]), rbinom(N, 1, pr[2]))
-}
-
-# Combine and store it in a dataframe
-cap2022_juv <- data.frame(
-  CH = paste(cap[,1], cap[,2], cap[,3])
-)
-
-# Turn it into a frequency table
-cap2022_juv <- cap2022_juv %>% 
-  count(CH, sort = T)
-
-# Remove rabbits never caught (this is what students are trying to estimate)
-cap2022_juv <- cap2022_juv[cap2022_juv$CH != "0 0 0",]
-
-# Adding comments for students
-
-cap2022_juv$comment <- NA
-
-for(i in 1:nrow(cap2022_juv)){
-  if(cap2022_juv$CH[i] == "1 1 1"){
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 1, 2, 3 */"
-  } else if(cap2022_juv$CH[i] == "1 1 0") {
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 1, 2 */"
-  } else if(cap2022_juv$CH[i] == "0 1 1") {
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 2, 3 */"
-  } else if(cap2022_juv$CH[i] == "1 0 1") {
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 1, 3 */"
-  } else if(cap2022_juv$CH[i] == "1 0 0") {
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 1 */"
-  } else if(cap2022_juv$CH[i] == "0 1 0") {
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 2 */"
-  } else if(cap2022_juv$CH[i] == "0 0 1") {
-    cap2022_juv$comment[i] <- "/* Number of rabbits caught on day 3 */"
-  }
-}
-
-# Final data looks like:
-cap2022_juv[,c(3, 1, 2)]
+cap2022_juv
 ```
 
 ```{r}
@@ -411,81 +345,38 @@ ggplot(cap2022_juv) +
   theme_minimal()
 ```
 
+Convert to form ready for `MARK`:
+
+```{r}
+cap2022_juv <- inp(cap2022_juv)
+```
+
 ### Two year olds
 
 There are 59 two year old rabbits in 2022.
 
-Capture probabilities vary over time (46%, 23% and 13%) in addition to a recapture effect. Recapture rates vary over time from 39% on day 2 to 48% on day 3.
+Capture probabilities vary over time (46%, 23% and 23%) in addition to a recapture effect. Recapture rates vary over time from 39% on day 2 to 48% on day 3.
+
+$p_1 = 0.46$
+
+$p_{2,3} = 0.23$
+
+$c_1 = 0.39$
+
+$c_2 = 0.48$
+
+$N = 59$
+
+$f_0 = 18$
 
 ```{r}
-# Set seed so that the random numbers are the same each time you run the script
-set.seed(666)
+N = 59
+p = c(0.46, 0.23, 0.23)
+pr = c(0.39, 0.48)
 
-# total number of rabbits
-N <- 59
+cap2022_suba <- ch(N = N, p = p, pr = pr)
 
-# number of t of trapping
-t <- 3
-
-# capture probabilities (must be same length as number of t)
-p <- c(0.46, 0.23, 0.13)
-
-# recapture probability (must be of length t - 1)
-pr <- c(0.39, 0.48)
-
-# create empty matrix
-cap <- matrix(nrow = N, ncol = t, data = NA)
-
-# see how many rabbits are actually captured on each day
-# Based on binomial distribution with probability p[day], do this for all rabbits (N) where there is only a single day to capture (1)
-cap[,1] <- rbinom(N, 1, p[1])
-# For day 2, use a for loop to go through each individual (i)
-# If rabbit [i] had not been caught on day 1 (cap[i,1] == 0)
-  # Then it uses the capture prob for day 2 p[2]
-  # But if it was caught, then use recapture prob for day 2 (pr[1])
-for(i in 1:nrow(cap)){
-  cap[i,2] <- ifelse(cap[i,1] == 0, rbinom(N, 1, p[2]), rbinom(N, 1, pr[1]))
-}
-for(i in 1:nrow(cap)){
-  cap[i,3] <- ifelse(cap[i,1] == 0 & cap[i,2] == 0, rbinom(N, 1, p[3]), rbinom(N, 1, pr[2]))
-}
-
-# Combine and store it in a dataframe
-cap2022_suba <- data.frame(
-  CH = paste(cap[,1], cap[,2], cap[,3])
-)
-
-# Turn it into a frequency table
-cap2022_suba <- cap2022_suba %>% 
-  count(CH, sort = T)
-
-# Remove rabbits never caught (this is what students are trying to estimate)
-cap2022_suba <- cap2022_suba[cap2022_suba$CH != "0 0 0",]
-
-# Adding comments for students
-
-cap2022_suba$comment <- NA
-
-for(i in 1:nrow(cap2022_juv)){
-  if(cap2022_suba$CH[i] == "1 1 1"){
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 1, 2, 3 */"
-  } else if(cap2022_suba$CH[i] == "1 1 0") {
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 1, 2 */"
-  } else if(cap2022_suba$CH[i] == "0 1 1") {
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 2, 3 */"
-  } else if(cap2022_suba$CH[i] == "1 0 1") {
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 1, 3 */"
-  } else if(cap2022_suba$CH[i] == "1 0 0") {
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 1 */"
-  } else if(cap2022_suba$CH[i] == "0 1 0") {
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 2 */"
-  } else if(cap2022_suba$CH[i] == "0 0 1") {
-    cap2022_suba$comment[i] <- "/* Number of rabbits caught on day 3 */"
-  }
-}
-
-# Final data looks like:
-cap2022_suba[,c(3, 1, 2)]
+cap2022_suba
 ```
 
 ```{r}
@@ -503,81 +394,38 @@ ggplot(cap2022_suba) +
   theme_minimal()
 ```
 
+Convert to form ready for `MARK`:
+
+```{r}
+cap2022_suba <- inp(cap2022_suba)
+```
+
 ### Adults
 
 There are 106 adult rabbits in 2022.
 
-Capture probabilities vary over time (26%, 38% and 43%) in addition to a recapture effect. Recapture rates are constant at 56%.
+Capture probabilities vary over time (26%, 38% and 43%) in addition to a recapture effect. Recapture rates are constant at 43%.
+
+$p_1 = 0.26$
+
+$p_2 = 0.38$
+
+$p_3 = 0.43$
+
+$c = 0.43$
+
+$N = 106$
+
+$f_0 = 22$
 
 ```{r}
-# Set seed so that the random numbers are the same each time you run the script
-set.seed(666)
+N = 106
+p = c(0.26, 0.38, 0.43)
+pr = c(0.43, 0.43)
 
-# total number of rabbits
-N <- 106
+cap2022_adult <- ch(N = N, p = p, pr = pr)
 
-# number of days of trapping
-t <- 3
-
-# capture probabilities (must be same length as number of days)
-p <- c(0.26, 0.38, 0.43)
-
-# recapture probability (must be of length t - 1)
-pr <- c(0.56, 0.56)
-
-# create empty matrix
-cap <- matrix(nrow = N, ncol = t, data = NA)
-
-# see how many rabbits are actually captured on each day
-# Based on binomial distribution with probability p[day], do this for all rabbits (N) where there is only a single day to capture (1)
-cap[,1] <- rbinom(N, 1, p[1])
-# For day 2, use a for loop to go through each individual (i)
-# If rabbit [i] had not been caught on day 1 (cap[i,1] == 0)
-  # Then it uses the capture prob for day 2 p[2]
-  # But if it was caught, then use recapture prob for day 2 (pr[1])
-for(i in 1:nrow(cap)){
-  cap[i,2] <- ifelse(cap[i,1] == 0, rbinom(N, 1, p[2]), rbinom(N, 1, pr[1]))
-}
-for(i in 1:nrow(cap)){
-  cap[i,3] <- ifelse(cap[i,1] == 0 & cap[i,2] == 0, rbinom(N, 1, p[3]), rbinom(N, 1, pr[2]))
-}
-
-# Combine and store it in a dataframe
-cap2022_adult <- data.frame(
-  CH = paste(cap[,1], cap[,2], cap[,3])
-)
-
-# Turn it into a frequency table
-cap2022_adult <- cap2022_adult %>% 
-  count(CH, sort = T)
-
-# Remove rabbits never caught (this is what students are trying to estimate)
-cap2022_adult <- cap2022_adult[cap2022_adult$CH != "0 0 0",]
-
-# Adding comments for students
-
-cap2022_adult$comment <- NA
-
-for(i in 1:nrow(cap2022_juv)){
-  if(cap2022_adult$CH[i] == "1 1 1"){
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 1, 2, 3 */"
-  } else if(cap2022_adult$CH[i] == "1 1 0") {
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 1, 2 */"
-  } else if(cap2022_adult$CH[i] == "0 1 1") {
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 2, 3 */"
-  } else if(cap2022_adult$CH[i] == "1 0 1") {
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 1, 3 */"
-  } else if(cap2022_adult$CH[i] == "1 0 0") {
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 1 */"
-  } else if(cap2022_adult$CH[i] == "0 1 0") {
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 2 */"
-  } else if(cap2022_adult$CH[i] == "0 0 1") {
-    cap2022_adult$comment[i] <- "/* Number of rabbits caught on day 3 */"
-  }
-}
-
-# Final data looks like:
-cap2022_adult[,c(3, 1, 2)]
+cap2022_adult
 ```
 
 ```{r}
@@ -595,53 +443,41 @@ ggplot(cap2022_adult) +
   theme_minimal()
 ```
 
-```{r}
-cap1965 <- cap1965[,c(3, 1, 2)]
-cap1965$end <- ";"
-cap1965$CH <- gsub(" ", "", cap1965$CH, fixed = TRUE)
+Convert to form ready for `MARK`:
 
+```{r}
+cap2022_adult <- inp(cap2022_adult)
+```
+
+# Write txt files
+
+```{r}
 write.table(cap1965, 
-            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_1965.txt", 
+            "C:\\github\\ZO4541\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_1965.INP", 
             row.name = FALSE, 
             col.names = FALSE, 
             quote = FALSE)
-
-cap1983 <- cap1983[,c(3, 1, 2)]
-cap1983$end <- ";"
-cap1983$CH <- gsub(" ", "", cap1983$CH, fixed = TRUE)
 
 write.table(cap1983, 
-            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_1983.txt", 
+            "C:\\github\\ZO4541\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_1983.INP", 
             row.name = FALSE, 
             col.names = FALSE, 
             quote = FALSE)
-
-cap2022_juv <- cap2022_juv[,c(3, 1, 2)]
-cap2022_juv$end <- ";"
-cap2022_juv$CH <- gsub(" ", "", cap2022_juv$CH, fixed = TRUE)
 
 write.table(cap2022_juv, 
-            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_juv.txt", 
+            "C:\\github\\ZO4541\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_juv.INP", 
             row.name = FALSE, 
             col.names = FALSE, 
             quote = FALSE)
-
-cap2022_suba <- cap2022_suba[,c(3, 1, 2)]
-cap2022_suba$end <- ";"
-cap2022_suba$CH <- gsub(" ", "", cap2022_suba$CH, fixed = TRUE)
 
 write.table(cap2022_suba, 
-            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_suba.txt", 
+            "C:\\github\\ZO4541\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_suba.INP", 
             row.name = FALSE, 
             col.names = FALSE, 
             quote = FALSE)
 
-cap2022_adult <- cap2022_adult[,c(3, 1, 2)]
-cap2022_adult$end <- ";"
-cap2022_adult$CH <- gsub(" ", "", cap2022_adult$CH, fixed = TRUE)
-
 write.table(cap2022_adult, 
-            "D:\\ZO4541_2022\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_adult.txt", 
+            "C:\\github\\ZO4541\\data\\management_plan\\closed_cmr\\zo4541_closed_cmr_2022_adult.INP", 
             row.name = FALSE, 
             col.names = FALSE, 
             quote = FALSE)
